@@ -16,23 +16,32 @@ const PLACEHOLDER_FILENAME: &str = "missing-image-placeholder.png";
 struct ImageManager {
     total_files: usize,
     dir: PathBuf,
-    images: Vec<PathBuf>,
     new_name: String,
+    images: Vec<String>,
     current_image: (wgpu::Texture, usize),
 
     // /// Image placeholder
     //placeholder: ImageBuffer<Rgb<u8>, Vec<u8>>,
 }
+
+const DIR_TRASH: &str = "trash";
+static DIR_OUTPUT: &str = "output";
+static DIR_OTHER: &str = "separate";
+
 impl ImageManager {
     fn new(app: &App) -> Self {
         let dir = PathBuf::from("/home/luctins/tmp/meme");
 
+        for d in [DIR_OTHER, DIR_OUTPUT, DIR_TRASH] {
+            std::fs::create_dir_all(dir.join("output").join(d))
+                .expect(format!("failed to create output directory {d}").as_str());
+        }
         let images: Vec<_> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|i|
                         if let Ok(it) = i {
                             if it.file_type().unwrap().is_file() {
-                                Some(PathBuf::from(it.file_name()))
+                                Some(it.file_name().into_string().unwrap())
                             } else { None }
                         } else { None })
             .collect();
@@ -53,6 +62,7 @@ impl ImageManager {
             images,
         }
     }
+
     pub fn next_image(&mut self, app: &App) {
         let max = self.images.len() - 1;
         self.current_image.1 += if self.current_image.1 >= max { 0 } else { 1 };
@@ -99,6 +109,35 @@ impl ImageManager {
             // self.next_image(app);
         }
     }
+
+    /// Path is prepended with no extra tokens so save can handle both separate and regular save
+    pub fn move_current(&mut self, app: &App, category: &str, new_name: &str) {
+        let f = &self.images[self.current_image.1];
+        let f_full = self.dir.join(&f);
+
+        let f_str: std::string::String =
+            f.chars()
+            .map(|c| if c == ' ' { '_' } else { c } ).collect();
+
+        let output = self.dir.join(DIR_OUTPUT)
+            .join(category)
+            .join(
+                format!("{}__{}",
+                        new_name,
+                        f_str,
+                )
+            );
+
+        println!("moving file: {f_full:?} -> {output:?}");
+
+        std::fs::copy(&f_full, &output).expect("failed to save file");
+
+        std::fs::remove_file(&f_full)
+            .expect("failed to  file");
+
+        self.images.remove(self.current_image.1);
+        self.reload_image(app);
+    }
 }
 
 
@@ -109,9 +148,10 @@ impl ImageManager {
 //       }
 // }
 
-#[derive(Deserialize, Serialize)]
+//#[derive(Deserialize, Serialize)]
 struct TextSuggester {
     categories: HashSet<String>,
+    last_key: Option<egui::Key>,
 }
 
 
@@ -141,6 +181,7 @@ impl TextSuggester {
         // TODO: load hashset from file
 
         Self {
+            last_key: None,
             categories:  vec![
                 "programming",
                 "warframe",
@@ -154,6 +195,20 @@ impl TextSuggester {
 
     pub fn get_suggestions(&mut self, prompt: &str) -> Vec<String> {
         get_results(&self.categories, prompt)
+    }
+
+    pub fn last_key_changed(&mut self, key: egui::Key) -> bool {
+        if let Some(ref mut last_key) = self.last_key {
+            if *last_key != key {
+                *last_key = key;
+                true
+            } else {
+                false
+            }
+        } else {
+            self.last_key = Some(key);
+            true
+        }
     }
 }
 
@@ -204,7 +259,6 @@ fn model(app: &App) -> Model {
     let window = app.window(window_id).unwrap();
     let egui = Egui::from_window(&window);
 
-
     Model::new(app, egui)
 }
 
@@ -221,6 +275,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
     let max_img = (manager.images.len() - 1 ) as f32;
 
     // GUI layout
+    //egui::TopBottomPanel::bottom("File Control").show(&egui_context, |ui| {
     egui::Window::new("File Control").show(&egui_context, |ui| {
         ui.label("Controls");
 
@@ -240,7 +295,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
                 c_ui.label("Trash");
                 let btn = c_ui.button("\u{1F5D1}"); // TODO: read btn state
                 if btn.clicked() {
-                    todo!("implement trash")
+                    manager.move_current(app, DIR_TRASH, "trashed")
                 }
             }
 
@@ -252,39 +307,76 @@ fn update(app: &App, model: &mut Model, update: Update) {
 
                 c_ui.label("Separate");
                 let btn = c_ui.add(egui::Button::new(" \u{1F4E4} "));
-                if btn.clicked() { todo!("implement separating images with current category") }
+                if btn.clicked() {
+                    let name = manager.new_name.clone();
+                    manager.move_current(app, DIR_OTHER, &name);
+                }
             }
 
         };
-
         ui.columns(2, create_buttons);
-
-        // TODO: create buttons for separating and and other options
 
         ui.separator();
         {
             ui.label("Remaining files");
-            let p = (manager.total_files as f32) / (manager.images.len() as f32);
+            let p = 1.0 - ((manager.total_files as f32) / (manager.images.len() as f32)) ;
             ui.add(egui::ProgressBar::new(p)
-                   .text(format!("{}", manager.images.len())));
+                   .text(format!("{} / {} - {:.1} %",
+                                 manager.total_files,
+                                 manager.images.len(),
+                                 p*100.0)));
         }
 
         ui.separator();
 
         ui.label("New file name:");
         let suggestions: Vec<String> = {
+            let mut segments: Vec<String> = manager.new_name.split("--")
+                .map(|s| s.to_string())
+                .collect();
+
+            let sug = text_suggest.get_suggestions(&segments.last().unwrap_or(&" ".to_string()));
+
+            if let Some(k) = ui.input().keys_down.iter().next() {
+                if text_suggest.last_key_changed(*k) {
+                    match k {
+                        egui::Key::Enter => {
+                            let name = manager.new_name.clone();
+                            manager.move_current(app, DIR_OUTPUT, &name);
+                            manager.new_name.clear();
+                        },
+                        egui::Key::Tab => {
+                            // TODO: add constant for separator
+                            if let (Some(replacement), Some(dest)) =
+                                (sug.first(), segments.last_mut()) {
+                                    *dest = replacement.to_string();
+                                    println!("completion: {replacement:?}");
+
+                                    manager.new_name = segments.iter()
+                                        .fold(String::new(), |mut acc, part| {
+                                            acc.push_str(part);
+                                            acc
+                                        });
+                                }
+                        }
+                        _ => {
+                            //println!("key: {k:?}");
+                        },
+                    }
+                }
+            }
             let r = ui.add(egui::TextEdit::singleline(&mut manager.new_name)
-                    .code_editor());
-
-            // NOTE: i could use r.changed() in the future to improve performance
-
-            text_suggest.get_suggestions(&manager.new_name)
+                           .code_editor()
+                           .lock_focus(true)
+                           //.cursor_at_end(true)
+            );
+            sug
         };
 
         let mut sug_iter = suggestions.iter();
         let first: String = sug_iter.next().map(|i| i.clone()).unwrap_or(" ".to_string());
 
-        ui.label(format!("Suggestions: {} (TAB to cycle)",
+        let lab_h = ui.label(format!("Suggestions: {}",
                          sug_iter
                          .fold(first,
                                |mut res, item| {
@@ -292,6 +384,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
                                    res.push_str(item);
                                    res
                          })
+
         ));
     });
 
@@ -303,8 +396,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     frame.clear(BLACK);
 
     let win = app.window_rect();
-    let canvas = Rect::from(win.clone()).top_left_of(win);
-    // TODO: create a 'canvas' for separating the UI from the image based on ratios using rect
+    let canvas = Rect::from(win.clone()).top_left_of(win).pad_top(100.0);
 
     let [img_w, img_h] = model.manager.current_image.0.size();
 
