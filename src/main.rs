@@ -1,3 +1,7 @@
+//! # File sorter
+
+/*--- Imports ------------------------------------------------------------------------------------*/
+
 #![allow(unused_imports)]
 use std::{path::PathBuf, fs::ReadDir, sync::Arc, collections::HashSet};
 
@@ -11,8 +15,16 @@ use lazy_static::lazy_static;
 
 use clap::Parser;
 
-const PLACEHOLDER_FILENAME: &str = "missing-image-placeholder.png";
+/*--- Global Constants ---------------------------------------------------------------------------*/
 
+const PLACEHOLDER_FILENAME: &str = "missing-image-placeholder.png";
+const DIR_TRASH: &str = "trash";
+static DIR_OUTPUT: &str = "output";
+static DIR_OTHER: &str = "separate";
+
+/*--- Impl ---------------------------------------------------------------------------------------*/
+
+/// Image and file manager
 struct ImageManager {
     total_files: usize,
     dir: PathBuf,
@@ -23,14 +35,10 @@ struct ImageManager {
     // /// Image placeholder
     //placeholder: ImageBuffer<Rgb<u8>, Vec<u8>>,
 }
-
-const DIR_TRASH: &str = "trash";
-static DIR_OUTPUT: &str = "output";
-static DIR_OTHER: &str = "separate";
-
 impl ImageManager {
-    fn new(app: &App) -> Self {
-        let dir = PathBuf::from("/home/luctins/tmp/meme");
+    fn new(app: &App, images_path: PathBuf) -> Self {
+        let dir = images_path.clone();
+        println!("images path: {dir:?}");
 
         for d in [DIR_OTHER, DIR_OUTPUT, DIR_TRASH] {
             std::fs::create_dir_all(dir.join("output").join(d))
@@ -47,6 +55,7 @@ impl ImageManager {
             .collect();
 
         eprintln!("file count: {}", images.len());
+        assert!(images.len() > 0);
 
         let mut image_path = PathBuf::from(&dir);
         image_path.push(&images[0]);
@@ -137,57 +146,34 @@ impl ImageManager {
 
         self.images.remove(self.current_image.1);
         self.reload_image(app);
+        self.new_name.clear();
     }
 }
 
-// structstruck::strike!{
-//     #[strikethrough[derive(Deserialize, Serialize)]]
-//       struct TextSuggester {
-//           categories: HashSet<String>,
-//       }
-// }
-
-//#[derive(Deserialize, Serialize)]
+/// Text suggestion engine
 struct TextSuggester {
     categories: HashSet<String>,
+    config_path: PathBuf,
+    new_category_buffer: String,
     last_key: Option<egui::Key>,
 }
-
-
-#[cached(
-    type = "SizedCache<String, Vec<String>>",
-    create = "{ SizedCache::with_size(20) }",
-    convert =  "{ prompt.to_string() }"
-)]
-fn get_results(categories: &HashSet<String>, prompt: &str) -> Vec<String> {
-    use rust_fuzzy_search::fuzzy_compare;
-
-    categories.iter()
-        .filter_map(|cat| {
-            let score = fuzzy_compare(cat, prompt);
-            //println!("score: {score}");
-
-            if score > 0.0 {
-                Some(cat.clone())
-            } else {
-                None
-            }
-        }).collect()
-}
-
 impl TextSuggester {
-    pub fn new() -> Self {
-        // TODO: load hashset from file
+    pub fn new(config_path: &PathBuf) -> Self {
+
+        let config_path = config_path.join("cfg").join("categories.json");
+        println!("cat config path: {config_path:?}");
+
+        let categories =
+            std::fs::read_to_string(&config_path)
+            .expect("failed to read preference file");
+        println!("categories: {categories}");
 
         Self {
             last_key: None,
-            categories:  vec![
-                "programming",
-                "warframe",
-                "linux",
-            ].into_iter()
-                .map(|v| v.to_string())
-                .collect()
+            categories: serde_json::from_str(&categories)
+                .expect("cannot parse categories preference file"),
+            new_category_buffer: String::new(),
+            config_path,
         }
     }
 
@@ -209,21 +195,64 @@ impl TextSuggester {
             true
         }
     }
+
+    pub fn add_category(&mut self) {
+        println!("added new category: {}", self.new_category_buffer);
+        self.categories.insert(self.new_category_buffer.clone());
+        self.new_category_buffer.clear();
+
+        let cfg_str = serde_json::to_string(&self.categories).unwrap();
+        std::fs::write(&self.config_path, &cfg_str).expect("cannot write preferences");
+    }
+}
+// outside because of caching method
+#[cached(
+    type = "SizedCache<String, Vec<String>>",
+    create = "{ SizedCache::with_size(20) }",
+    convert =  "{ prompt.to_string() }"
+)]
+fn get_results(categories: &HashSet<String>, prompt: &str) -> Vec<String> {
+    use rust_fuzzy_search::fuzzy_compare;
+
+    categories.iter()
+        .filter_map(|cat| {
+            let score = fuzzy_compare(cat, prompt);
+            //println!("score: {score}");
+
+            if score > 0.0 {
+                Some(cat.clone())
+            } else {
+                None
+            }
+        }).collect()
 }
 
-/// main user state for the application
+
+/// Main user state for the application
 struct Model {
     egui: Egui,
     text_suggest: TextSuggester,
     manager: ImageManager,
 }
-
 impl Model {
     pub fn new(app: &App, egui: Egui) -> Self {
+        let folder =
+            if let Ok(args) = Args::try_parse() {
+                args.folder
+            } else {
+                println!("cannot parse cmd line args, using default path");
+                let path_s = std::fs::read_to_string(
+                    app.assets_path().unwrap().join("cfg").join("default_path")
+                ).expect("cannot read default path");
+                let path_s = path_s.trim();
+
+                PathBuf::from(path_s)
+            };
+
         Model {
             egui,
-            text_suggest: TextSuggester::new(),
-            manager: ImageManager::new(app),
+            text_suggest: TextSuggester::new(&app.assets_path().expect("cannot open project path")),
+            manager: ImageManager::new(app, folder),
         }
     }
 }
@@ -319,6 +348,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
         };
         ui.columns(2, create_buttons);
 
+        // percentage bar
         ui.separator();
         {
             ui.label("Remaining files");
@@ -330,65 +360,84 @@ fn update(app: &App, model: &mut Model, update: Update) {
                                  p*100.0)));
         }
 
+        // main input box
         ui.separator();
-
         ui.label("New file name:");
+        let mut segments: Vec<String> = manager.new_name.split("--")
+            .map(|s| s.to_string())
+            .collect();
+
         let suggestions: Vec<String> = {
-            let mut segments: Vec<String> = manager.new_name.split("--")
-                .map(|s| s.to_string())
-                .collect();
+            // TODO: add constant for separator
 
-            let sug = text_suggest.get_suggestions(&segments.last().unwrap_or(&" ".to_string()));
 
+            let suggestions = text_suggest.get_suggestions(&segments.last().unwrap_or(&" ".to_string()));
+
+            let inputbox_r = ui.add(egui::TextEdit::singleline(&mut manager.new_name)
+                            .code_editor()
+                            .lock_focus(true)
+                            //.cursor_at_end(true)
+            );
+
+            // detect confirmation
             if let Some(k) = ui.input().keys_down.iter().next() {
                 if text_suggest.last_key_changed(*k) {
                     match k {
                         egui::Key::Enter => {
-                            let name = manager.new_name.clone();
-                            manager.move_current(app, DIR_OUTPUT, &name);
-                            manager.new_name.clear();
+                            if inputbox_r.lost_focus() {
+                                let name = manager.new_name.clone();
+                                manager.move_current(app, DIR_OUTPUT, &name);
+                                inputbox_r.request_focus();
+                            }
                         },
                         egui::Key::Tab => {
-                            // TODO: add constant for separator
+                            // both replacement and destination are not empty
                             if let (Some(replacement), Some(dest)) =
-                                (sug.first(), segments.last_mut()) {
-                                    *dest = replacement.to_string();
-                                    println!("completion: {replacement:?}");
+                                (suggestions.first(), segments.last_mut())
+                            {
+                                *dest = replacement.to_string();
+                                println!("completion: {replacement:?}");
 
-                                    manager.new_name = segments.iter()
-                                        .fold(String::new(), |mut acc, part| {
-                                            acc.push_str(part);
-                                            acc
-                                        });
-                                }
+                                // replace name with new string
+                                manager.new_name = segments.iter()
+                                    .fold(String::new(), |mut acc, part| {
+                                        acc.push_str(part);
+                                        acc
+                                    });
+                            }
                         }
-                        _ => {
-                            //println!("key: {k:?}");
-                        },
+                        _ => {},
                     }
                 }
             }
-            let _r = ui.add(egui::TextEdit::singleline(&mut manager.new_name)
-                           .code_editor()
-                           .lock_focus(true)
-                           //.cursor_at_end(true)
-            );
-            sug
+            suggestions
         };
 
-        let mut sug_iter = suggestions.iter();
-        let first: String = sug_iter.next().map(|i| i.clone()).unwrap_or(" ".to_string());
+        let mut suggestions_iter = suggestions.iter();
+        let first: String = suggestions_iter.next().map(|i| i.clone()).unwrap_or(" ".to_string());
 
-        let _lab_h = ui.label(format!("Suggestions: {}",
-                         sug_iter
-                         .fold(first,
-                               |mut res, item| {
-                                   res.push_str(", ");
-                                   res.push_str(item);
-                                   res
-                         })
+        let _lab_h = ui.label(
+            format!("Suggestions: {}",
+                    suggestions_iter
+                    .fold(first, |mut res, item| {
+                        res.push_str(", ");
+                        res.push_str(item);
+                        res
+                    })));
 
-        ));
+        // new categorie box
+        ui.separator();
+        ui.columns(2, |col| {
+            if let Some(segment) = segments.last() {
+                text_suggest.new_category_buffer
+                    .replace(segment);
+            }
+
+            col[0].text_edit_singleline(&mut text_suggest.new_category_buffer);
+            if col[1].button(" \u{002b} ").clicked() {
+                    text_suggest.add_category();
+            }
+        });
     });
 }
 const PAD:f32 = 45.0;
@@ -409,12 +458,13 @@ fn view(app: &App, model: &Model, frame: Frame) {
     {
         let img_w_f = img_w as f32;
         let img_h_f = img_h as f32;
+        let img_h_fit = img_h_f * (canvas.w() / img_w_f);
 
-        if img_w_f > canvas.w() {
+        if img_w_f > canvas.w() && (img_h_fit+PAD) < canvas.h(){
             // fit to width
             dbg_msg = "wide".to_string();
 
-            Vec2::new(canvas.w() - PAD, img_h_f * (canvas.w() / img_w_f) - PAD)
+            Vec2::new(canvas.w() - PAD, img_h_fit - PAD)
         } else {
             dbg_msg = "tall".to_string();
 
