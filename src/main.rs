@@ -452,7 +452,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     let [img_w, img_h] = model.manager.current_image.0.size();
 
-
+    #[allow(unused)]
     let mut dbg_msg: String;
 
     // scale image preserving proportions
@@ -478,7 +478,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     let xy = Point2::new(canvas.x(), canvas.y());
 
-    dbg_msg += &format!(" img wh: {wh:?}, \n canvas: .xy: {:?} .hw: {:?}",
+    dbg_msg += &format!(" -- img wh: {wh:?} -- canvas: .xy: {:?} .hw: {:?}",
                         canvas.xy(), canvas.wh()).to_string();
 
     // bg rect
@@ -495,11 +495,11 @@ fn view(app: &App, model: &Model, frame: Frame) {
         .wh(wh)
         .xy(xy);
 
-    // debug text
-        draw.text(&dbg_msg)
-        .color(RED).font_size(20)
-        .w(500.0)
-        .xy(canvas.mid_bottom());
+    // // debug text
+    // draw.text(&dbg_msg)
+    //     .color(RED).font_size(20)
+    //     .w(1000.0)
+    //     .xy(canvas.mid_bottom());
 
     // run queued drawing commands
     draw.to_frame(app, &frame).unwrap();
