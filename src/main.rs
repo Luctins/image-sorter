@@ -321,7 +321,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
             {
                 let c_ui = &mut col[0];
                 c_ui.label("Prev");
-                let btn = c_ui.add(egui::Button::new(" ⏴ "));
+                let btn = c_ui.add_enabled(manager.current_image.1 != 0 ,egui::Button::new(" ⏴ "));
                 if btn.clicked() { manager.prev_image(app) }
 
                 c_ui.label("Trash");
@@ -334,7 +334,8 @@ fn update(app: &App, model: &mut Model, update: Update) {
             {
                 let c_ui = &mut col[1];
                 c_ui.label("Next");
-                let btn = c_ui.add(egui::Button::new(" ⏵ "));
+                let btn = c_ui.add_enabled(manager.current_image.1 != (manager.images.len()-1),
+                                           egui::Button::new(" ⏵ "));
                 if btn.clicked() { manager.next_image(app) }
 
                 c_ui.label("Separate");
