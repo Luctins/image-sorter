@@ -452,6 +452,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     let [img_w, img_h] = model.manager.current_image.0.size();
 
+
     let mut dbg_msg: String;
 
     // scale image preserving proportions
@@ -460,8 +461,9 @@ fn view(app: &App, model: &Model, frame: Frame) {
         let img_w_f = img_w as f32;
         let img_h_f = img_h as f32;
         let img_h_fit = img_h_f * (canvas.w() / img_w_f);
+        let img_w_fit = img_w_f * (canvas.h() / img_h_f);
 
-        if img_w_f > canvas.w() && (img_h_fit+PAD) < canvas.h(){
+        if img_w > img_h && (img_h_fit+PAD) < canvas.h() {
             // fit to width
             dbg_msg = "wide".to_string();
 
@@ -470,14 +472,14 @@ fn view(app: &App, model: &Model, frame: Frame) {
             dbg_msg = "tall".to_string();
 
             // fit to height
-            Vec2::new(img_w_f * (canvas.h() / img_h_f) - PAD, canvas.h() - PAD)
+            Vec2::new(img_w_fit - PAD, canvas.h() - PAD)
         }
     };
 
     let xy = Point2::new(canvas.x(), canvas.y());
 
-    // dbg_msg += &format!("\nimg wh: {wh:?}, \n canvas: .xy: {:?} .hw: {:?}",
-    //                     canvas.xy(), canvas.wh()).to_string();
+    dbg_msg += &format!(" img wh: {wh:?}, \n canvas: .xy: {:?} .hw: {:?}",
+                        canvas.xy(), canvas.wh()).to_string();
 
     // bg rect
     draw
@@ -494,10 +496,10 @@ fn view(app: &App, model: &Model, frame: Frame) {
         .xy(xy);
 
     // debug text
-    // draw.text(&dbg_msg)
-    //     .color(RED).font_size(20)
-    //     .w(500.0)
-    //     .xy(canvas.mid_bottom());
+        draw.text(&dbg_msg)
+        .color(RED).font_size(20)
+        .w(500.0)
+        .xy(canvas.mid_bottom());
 
     // run queued drawing commands
     draw.to_frame(app, &frame).unwrap();
