@@ -140,7 +140,6 @@ impl ImageManager {
     }
 }
 
-
 // structstruck::strike!{
 //     #[strikethrough[derive(Deserialize, Serialize)]]
 //       struct TextSuggester {
@@ -275,8 +274,12 @@ fn update(app: &App, model: &mut Model, update: Update) {
     let max_img = (manager.images.len() - 1 ) as f32;
 
     // GUI layout
-    //egui::TopBottomPanel::bottom("File Control").show(&egui_context, |ui| {
-    egui::Window::new("File Control").show(&egui_context, |ui| {
+    //egui::Window::new("File Control").show(&egui_context, |ui| {
+    egui::TopBottomPanel::bottom("File Control").show(&egui_context, |ui| {
+
+        ui.label(format!("current image: {}", manager.images[manager.current_image.1]));
+        ui.separator();
+
         ui.label("Controls");
 
         ui.add(egui::Slider::new(&mut pos, 0.0..=max_img).text("Skip to file"));
@@ -365,7 +368,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
                     }
                 }
             }
-            let r = ui.add(egui::TextEdit::singleline(&mut manager.new_name)
+            let _r = ui.add(egui::TextEdit::singleline(&mut manager.new_name)
                            .code_editor()
                            .lock_focus(true)
                            //.cursor_at_end(true)
@@ -376,7 +379,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
         let mut sug_iter = suggestions.iter();
         let first: String = sug_iter.next().map(|i| i.clone()).unwrap_or(" ".to_string());
 
-        let lab_h = ui.label(format!("Suggestions: {}",
+        let _lab_h = ui.label(format!("Suggestions: {}",
                          sug_iter
                          .fold(first,
                                |mut res, item| {
@@ -387,51 +390,68 @@ fn update(app: &App, model: &mut Model, update: Update) {
 
         ));
     });
-
-
 }
+const PAD:f32 = 45.0;
 
 fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     frame.clear(BLACK);
 
     let win = app.window_rect();
-    let canvas = Rect::from(win.clone()).top_left_of(win).pad_top(100.0);
+    let canvas = Rect::from(win.clone()).top_left_of(win).pad_bottom(300.0);
 
     let [img_w, img_h] = model.manager.current_image.0.size();
 
+    let mut dbg_msg: String;
+
     // scale image preserving proportions
-    let (xy, wh): (Point2, Vec2) =
-        {
-            let img_w_fit = (img_w as f32) * (canvas.h() / (img_h as f32));
+    let wh: Vec2 =
+    {
+        let img_w_f = img_w as f32;
+        let img_h_f = img_h as f32;
 
-            if img_w > img_h || canvas.w() < img_w_fit {
-                let img_h_fit = (img_h as f32) * (canvas.w() / (img_w as f32));
-                //println!("wide");
+        if img_w_f > canvas.w() {
+            // fit to width
+            dbg_msg = "wide".to_string();
 
-                // image is wide, fit to width
-                (
-                    Point2::new(0.0, 0.0),
-                    Vec2::new(canvas.w(), img_h_fit)
-                )
-            } else {
-                //println!("tall");
+            Vec2::new(canvas.w() - PAD, img_h_f * (canvas.w() / img_w_f) - PAD)
+        } else {
+            dbg_msg = "tall".to_string();
 
-                // image is tall, fit to height
-                (
-                    Point2::new(0.0, 0.0),
-                    Vec2::new(img_w_fit, canvas.h())
-                )
-            }
-        };
-    //println!("wh: {wh:?}, canvas: {:?}", canvas.wh());
+            // fit to height
+            Vec2::new(img_w_f * (canvas.h() / img_h_f) - PAD, canvas.h() - PAD)
+        }
+    };
 
-    draw.texture(&model.manager.current_image.0)
-        .xy(xy)
-        .wh(wh);
+    let xy = Point2::new(canvas.x(), canvas.y());
 
+    // dbg_msg += &format!("\nimg wh: {wh:?}, \n canvas: .xy: {:?} .hw: {:?}",
+    //                     canvas.xy(), canvas.wh()).to_string();
+
+    // bg rect
+    draw
+        .rect()
+        //.xy(canvas.wh())
+        .wh(canvas.wh())
+        .xy(canvas.xy())
+        .color(DARKGREY);
+
+    draw
+        //.scissor(canvas)
+        .texture(&model.manager.current_image.0)
+        .wh(wh)
+        .xy(xy);
+
+    // debug text
+    // draw.text(&dbg_msg)
+    //     .color(RED).font_size(20)
+    //     .w(500.0)
+    //     .xy(canvas.mid_bottom());
+
+    // run queued drawing commands
     draw.to_frame(app, &frame).unwrap();
 
+    // draw ui on top
     model.egui.draw_to_frame(&frame).unwrap();
 }
 
