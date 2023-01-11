@@ -38,6 +38,7 @@ struct ImageManager {
     // /// Image placeholder
     //placeholder: ImageBuffer<Rgb<u8>, Vec<u8>>,
 }
+
 impl ImageManager {
     fn new(app: &App, images_path: PathBuf) -> Self {
         let dir = images_path.clone();
@@ -214,20 +215,26 @@ impl TextSuggester {
 )]
 fn get_results(categories: &HashSet<String>, prompt: &str) -> Vec<String> {
     use rust_fuzzy_search::fuzzy_compare;
+    use rust_fuzzy_search::fuzzy_search_sorted;
 
-    categories
+    fuzzy_search_sorted(prompt, &categories.iter().map(|item| item.as_str()).collect::<Vec<&str>>())
         .iter()
-        .filter_map(|cat| {
-            let score = fuzzy_compare(cat, prompt);
-            //println!("score: {score}");
-
-            if score > 0.0 {
-                Some(cat.clone())
-            } else {
-                None
-            }
-        })
+        .map(|(cat, _score)| String::from(*cat))
         .collect()
+
+    // categories
+    //     .iter()
+    //     .filter_map(|cat| {
+    //         let score = fuzzy_compare(cat, prompt);
+    //         //println!("score: {score}");
+
+    //         if score > 0.0 {
+    //             Some(score, cat.clone())
+    //         } else {
+    //             None
+    //         }
+    //     })
+    //     .collect()
 }
 
 /// Main user state for the application
@@ -320,9 +327,9 @@ fn update(app: &App, model: &mut Model, update: Update) {
                 manager.seek_to_image(app, pos as usize);
             }
 
-            if col[1].button("Open in file manager").clicked() {
+            if col[1].button("Open file").clicked() {
                 let _ = std::process::Command::new("xdg-open")
-                    .arg(&manager.images[manager.current_image.1])
+                    .arg(manager.dir.join(&manager.images[manager.current_image.1]))
                     .spawn()
                     .unwrap();
             }
@@ -390,14 +397,17 @@ fn update(app: &App, model: &mut Model, update: Update) {
         let mut segments: Vec<String> = manager
             .new_name
             .split("--")
-            .map(|s| s.to_string())
+            .filter_map(|s| if ! s.is_empty() { Some(s.to_string()) } else { None})
             .collect();
 
         let suggestions: Vec<String> = {
             // TODO: add constant for separator
 
-            let suggestions =
-                text_suggest.get_suggestions(&segments.last().unwrap_or(&" ".to_string()));
+            let suggestions = if let Some(segment) = segments.last() {
+                text_suggest.get_suggestions(&segment)
+            } else {
+                vec![]
+            };
 
             let inputbox_r = ui.add(
                 egui::TextEdit::singleline(&mut manager.new_name)
@@ -447,15 +457,18 @@ fn update(app: &App, model: &mut Model, update: Update) {
 
         let _lab_h = ui.label(format!(
             "Suggestions: {}",
-            suggestions_iter.fold(first, |mut res, item| {
-                res.push_str(", ");
-                res.push_str(item);
-                res
+            suggestions_iter.take(2)
+                .fold(first, |mut res, item| {
+                    res.push_str(", ");
+                    res.push_str(item);
+                    res
             })
         ));
 
-        // new categorie box
+        // new category box
         ui.separator();
+        ui.separator();
+        ui.label("Add new category");
         ui.columns(2, |col| {
             if let Some(segment) = segments.last() {
                 text_suggest.new_category_buffer.replace(segment);
