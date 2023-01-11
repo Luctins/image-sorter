@@ -1,1 +1,32 @@
 * Minimal Image sorter
+
+This is a idea that i've been meaning to make for a while, right now it's super beta and probably will change a lot at random intervals.
+
+** Features
+- autossugestion with persistent editable categories (press tab to accept)
+- fw/bw seek with bar
+- progress bar
+
+** Screenshots
+
+[[./repo/screenshots/example.png]]
+
+** TO-DO
+:PROPERTIES:
+:CREATED:  [2023-01-10 Tue 21:31]
+:END:
+
+*** TODO move the cursor to the end when accepting suggestions
+:PROPERTIES:
+:CREATED:  [2023-01-10 Tue 21:32]
+:END:
+
+*** TODO overral documentation and cleanup
+:PROPERTIES:
+:CREATED:  [2023-01-10 Tue 21:33]
+:END:
+
+*** TODO cycle suggestions by pressing TAB
+:PROPERTIES:
+:CREATED:  [2023-01-10 Tue 21:36]
+:END:
