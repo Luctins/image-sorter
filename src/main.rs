@@ -97,15 +97,13 @@ impl ImageManager {
     }
 
     pub fn reload_image(&mut self, app: &App) {
-        let mut image_path = PathBuf::from(&self.dir);
-
-        image_path.push(&self.images[self.current_image.1]);
+        let image_path = self.dir.join(&self.images[self.current_image.1]);
 
         println!("loaded image: {image_path:?}");
-        if let Ok(img) = wgpu::Texture::from_path(app, image_path) {
+        if let Ok(img) = wgpu::Texture::from_path(app, &image_path) {
             self.current_image.0 = img;
         } else {
-            eprintln!("cannot open image");
+            eprintln!("cannot open image: {image_path:?}");
 
             let p = app.assets_path().expect("missing assets folder")
                 .join("img")
@@ -306,13 +304,26 @@ fn update(app: &App, model: &mut Model, update: Update) {
     //egui::Window::new("File Control").show(&egui_context, |ui| {
     egui::TopBottomPanel::bottom("File Control").show(&egui_context, |ui| {
 
+        //ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+
         ui.label(format!("current image: {}", manager.images[manager.current_image.1]));
         ui.separator();
-
         ui.label("Controls");
 
-        ui.add(egui::Slider::new(&mut pos, 0.0..=max_img).text("Skip to file"));
-        manager.seek_to_image(app, pos as usize);
+        ui.columns(2, |col| {
+
+            let r = col[0].add(egui::Slider::new(&mut pos, 0.0..=max_img).text("Skip to file"));
+            if r.changed() {
+                manager.seek_to_image(app, pos as usize);
+            }
+
+            if col[1].button("Open in file manager").clicked() {
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(&manager.images[manager.current_image.1])
+                    .spawn()
+                    .unwrap();
+            }
+        });
 
         let create_buttons = |col: &mut [egui::Ui] | {
             // let mut btn_ev: Vec<(Response, Box<dyn FnOnce(&mut ImageManager, Response)>)> =
@@ -321,7 +332,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
             {
                 let c_ui = &mut col[0];
                 c_ui.label("Prev");
-                let btn = c_ui.add_enabled(manager.current_image.1 != 0 ,egui::Button::new(" ⏴ "));
+                let btn = c_ui.add_enabled(manager.current_image.1 != 0, egui::Button::new(" ⏴ "));
                 if btn.clicked() { manager.prev_image(app) }
 
                 c_ui.label("Trash");
@@ -335,7 +346,9 @@ fn update(app: &App, model: &mut Model, update: Update) {
                 let c_ui = &mut col[1];
                 c_ui.label("Next");
                 let btn = c_ui.add_enabled(manager.current_image.1 != (manager.images.len()-1),
-                                           egui::Button::new(" ⏵ "));
+                                           egui::Button::new(" ⏵ ")
+                );
+
                 if btn.clicked() { manager.next_image(app) }
 
                 c_ui.label("Separate");
@@ -347,7 +360,8 @@ fn update(app: &App, model: &mut Model, update: Update) {
             }
 
         };
-        ui.columns(2, create_buttons);
+        ui.with_layout(egui::Layout::top_down(egui::Align::Center),
+                                              |ui| ui.columns(2, create_buttons));
 
         // percentage bar
         ui.separator();
