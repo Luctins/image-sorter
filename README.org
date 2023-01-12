@@ -15,27 +15,12 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 :PROPERTIES:
 :CREATED:  [2023-01-10 Tue 21:31]
 :END:
-
-*** TODO autocompletion related
-:PROPERTIES:
-:CREATED:  [2023-01-12 Thu 18:24]
-:END:
-**** TODO move the cursor to the end when accepting suggestions
-:PROPERTIES:
-:CREATED:  [2023-01-10 Tue 21:32]
-:END:
-
-Not sure how to move the text cursor yet
-**** TODO cycle suggestions by pressing TAB
-:PROPERTIES:
-:CREATED:  [2023-01-10 Tue 21:36]
-:END:
-**** TODO offer a dropdown like suggested [[https://github.com/emilk/egui/issues/122][here]]
-:PROPERTIES:
-:CREATED:  [2023-01-12 Thu 18:24]
-:END:
-
-*** TODO overral documentation and cleanup
-:PROPERTIES:
-:CREATED:  [2023-01-10 Tue 21:33]
-:END:
+- [ ] Autocompletion related
+  - [ ] Move the cursor to the end when accepting suggestions (Not sure how to move the text cursor yet)
+  - [ ] Cycle suggestions by pressing TAB
+  - [ ] Offer a dropdown like explained [[https://github.com/emilk/egui/issues/122][here]]
+- [ ] Make code more 'holistic'
+  - [ ] Rely on the type system
+  - [ ] Properly modelled interactions between modules
+- [ ] Get the current directory instead of reading from a file or read it from command line
+- [ ] Add a debug window for general use
