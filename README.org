@@ -24,4 +24,5 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 - [ ] Add a debug window for general use
 - [ ] Prompt for a path to use when no images are on the current directory and no command line arguments are provided
   - [ ] implement =UiState= system with different screens based on state
+- [ ] Implement scrolling for very tall images
 - [X] Get the current directory instead of reading from a file or read it from the command line
