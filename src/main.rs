@@ -3,12 +3,12 @@
 /*--- Imports ------------------------------------------------------------------------------------*/
 
 #![allow(unused_imports)]
-use std::{collections::HashSet, fs::ReadDir, path::PathBuf, sync::Arc};
+use std::{collections::{HashSet, HashMap}, fs::ReadDir, path::PathBuf, sync::Arc};
 
 use nannou::prelude::*;
 use nannou_egui::{
     self,
-    egui::{self, Response, TextBuffer, TextEdit},
+    egui::{self, Response, TextBuffer, TextEdit, color::rgb_from_hsv},
     Egui,
 };
 
@@ -293,9 +293,9 @@ impl Model {
         };
 
         Model {
-            egui,
             text_suggest: TextSuggester::new(&app.assets_path().expect("cannot open project path")),
             manager: ImageManager::new(app, folder),
+            egui,
         }
     }
 }
@@ -529,10 +529,11 @@ fn update(app: &App, model: &mut Model, update: Update) {
         });
     });
 }
-const PAD: f32 = 45.0;
 
 /// Drawing loop
 fn view(app: &App, model: &Model, frame: Frame) {
+    const PAD: f32 = 45.0;
+
     let draw = app.draw();
     frame.clear(BLACK);
 
@@ -542,7 +543,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let [img_w, img_h] = model.manager.current_image.0.size();
 
     #[allow(unused)]
-    let mut dbg_msg: String;
+    let mut dbg_text = String::new();
 
     // scale image preserving proportions
     let wh: Vec2 = {
@@ -551,50 +552,62 @@ fn view(app: &App, model: &Model, frame: Frame) {
         let img_h_fit = img_h_f * (canvas.w() / img_w_f);
         let img_w_fit = img_w_f * (canvas.h() / img_h_f);
 
-        if img_w > img_h && (img_h_fit + PAD) < canvas.h() {
+        let fit_to_width = || {
             // fit to width
-            dbg_msg = "wide".to_string();
-
             Vec2::new(canvas.w() - PAD, img_h_fit - PAD)
-        } else {
-            dbg_msg = "tall".to_string();
+        };
 
+        let fit_to_height = || {
             // fit to height
             Vec2::new(img_w_fit - PAD, canvas.h() - PAD)
+        };
+
+        if img_w > img_h {
+            if img_h_fit < canvas.h() {
+                //dbg_text += "1".into();
+
+                fit_to_width()
+            } else {
+                //dbg_text += "2".into();
+
+                fit_to_height()
+            }
+        } else {
+            if img_h_fit > canvas.h() {
+                //dbg_text += "3".into();
+
+                fit_to_height()
+            } else {
+                //dbg_text += "4".into();
+
+                fit_to_width()
+            }
         }
     };
 
     let xy = Point2::new(canvas.x(), canvas.y());
 
-    dbg_msg += &format!(
-        " -- img wh: {wh:?} -- canvas: .xy: {:?} .hw: {:?}",
-        canvas.xy(),
-        canvas.wh()
-    )
-    .to_string();
-
-    let view = model.manager.current_image.0.view().build();
-
-    let sampler = wgpu::SamplerBuilder::new().into_descriptor();
+    //let view = model.manager.current_image.0.view().build();
 
     // bg rect
     draw.rect()
         //.xy(canvas.wh())
         .wh(canvas.wh())
         .xy(canvas.xy())
+        .color(BLACK);
+
+    draw.rect()
+        .xy(xy)
+        .wh(wh+Vec2::new(PAD, PAD))
         .color(DARKGREY);
 
-    draw
-        //.scissor(canvas)
-        .texture(&model.manager.current_image.0)
-        .wh(wh)
-        .xy(xy);
+    draw.texture(&model.manager.current_image.0)
+        .xy(xy)
+        .wh(wh);
 
-    // // debug text
-    // draw.text(&dbg_msg)
-    //     .color(RED).font_size(20)
-    //     .w(1000.0)
-    //     .xy(canvas.mid_bottom());
+    // draw.text(&dbg_text)
+    //     .xy(canvas.mid_top())
+    //     .font_size(25);
 
     // run queued drawing commands
     draw.to_frame(app, &frame).unwrap();
