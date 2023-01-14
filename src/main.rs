@@ -26,8 +26,13 @@ const DIR_TRASH: &str = "trash";
 static DIR_OUTPUT: &str = "output";
 static DIR_OTHER: &str = "separate";
 
-/*--- Impl ---------------------------------------------------------------------------------------*/
+lazy_static!{
+    /// Supported file types
+    static ref ALLOWED_FILE_TYPES: HashSet<String> = vec![ "png", "jpg", "jpeg", "webp"]
+        .drain(..).map(|v| v.to_string()).collect();
+}
 
+/*--- Impl ---------------------------------------------------------------------------------------*/
 /// Image and file manager
 struct ImageManager {
     total_files: usize,
@@ -49,12 +54,22 @@ impl ImageManager {
                 .expect(format!("failed to create output directory {d}").as_str());
         }
 
+        // filter files in the directory that match certain criteria
         let images: Vec<_> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|i| {
                 if let Ok(it) = i {
                     if it.file_type().unwrap().is_file() {
-                        Some(it.file_name().into_string().unwrap())
+                        let filename = it.file_name().into_string().unwrap();
+                        if let Some(extension) = filename.split('.').last() {
+                            if ALLOWED_FILE_TYPES.contains(extension) {
+                                Some(filename)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
@@ -64,15 +79,18 @@ impl ImageManager {
             })
             .collect();
 
-        eprintln!("file count: {}", images.len());
-        assert!(images.len() > 0);
+        if images.len() == 0 {
+            eprintln!("no supported files in current directory: {dir:?}");
+            std::process::exit(1);
+        }
 
-        let mut image_path = PathBuf::from(&dir);
-        image_path.push(&images[0]);
+        println!("file count: {}", images.len());
+
+        let image_path = dir.join(&images[0]);
+        println!("first image: {image_path:?}");
         let image = wgpu::Texture::from_path(app, image_path).unwrap();
 
-        // TODO: use hashset
-        // TODO: manage
+
         Self {
             total_files: images.len(),
             current_image: (image, 0),
@@ -109,7 +127,7 @@ impl ImageManager {
     pub fn reload_image(&mut self, app: &App) {
         let image_path = self.dir.join(&self.images[self.current_image.1]);
 
-        println!("loaded image: {image_path:?}");
+        println!("loaded image: {image_path:?}, index: {}", self.current_image.1);
         if let Ok(img) = wgpu::Texture::from_path(app, &image_path) {
             self.current_image.0 = img;
         } else {
@@ -165,7 +183,7 @@ struct TextSuggester {
 impl TextSuggester {
     pub fn new(config_path: &PathBuf) -> Self {
         let config_path = config_path.join("cfg").join("categories.json");
-        println!("cat config path: {config_path:?}");
+        println!("categories config path: {config_path:?}");
 
         let categories =
             std::fs::read_to_string(&config_path).expect("failed to read preference file");
@@ -245,17 +263,33 @@ struct Model {
 }
 impl Model {
     pub fn new(app: &App, egui: Egui) -> Self {
-        let folder = if let Ok(args) = Args::try_parse() {
-            args.folder
-        } else {
-            println!("cannot parse cmd line args, using default path");
-            let path_s = std::fs::read_to_string(
-                app.assets_path().unwrap().join("cfg").join("default_path"),
-            )
-            .expect("cannot read default path");
-            let path_s = path_s.trim();
+        use clap::error::{self, ErrorKind, Error};
 
-            PathBuf::from(path_s)
+        let r = Args::try_parse();
+
+        let folder = match r {
+            Ok(a) => {
+                a.folder
+            },
+            Err(ref e) => {
+                match e.kind() {
+                    ErrorKind::MissingRequiredArgument => {
+                        println!("using current dir as fallback");
+                        std::env::current_dir()
+                            .expect("cannot read current dir but no args provided")
+                    },
+
+                    ErrorKind::DisplayHelp => {
+                        println!("{e}");
+                        std::process::exit(0);
+                    },
+
+                    _ => {
+                        let _ = r.unwrap();
+                        unreachable!("unsupported");
+                    }
+                }
+            },
         };
 
         Model {
@@ -269,7 +303,7 @@ impl Model {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
+    #[arg()]
     folder: PathBuf,
 }
 
@@ -412,8 +446,22 @@ fn update(app: &App, model: &mut Model, update: Update) {
             let inputbox_r = ui.add(
                 egui::TextEdit::singleline(&mut manager.new_name)
                     .code_editor()
+                    .hint_text("New filename")
                     .lock_focus(true), //.cursor_at_end(true)
             );
+
+            // let popup_id = ui.make_persistent_id("suggestions_box");
+
+            // if suggestions.first().is_some() {
+            //     ui.memory().toggle_popup(popup_id);
+            // }
+
+            // egui::popup_below_widget(ui, popup_id, &inputbox_r, |ui| {
+            //     for sug in &suggestions {
+            //         ui.label(sug);
+            //     }
+            // });
+
 
             // detect confirmation
             if let Some(k) = ui.input().keys_down.iter().next() {
@@ -483,6 +531,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
 }
 const PAD: f32 = 45.0;
 
+/// Drawing loop
 fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     frame.clear(BLACK);
@@ -523,6 +572,10 @@ fn view(app: &App, model: &Model, frame: Frame) {
         canvas.wh()
     )
     .to_string();
+
+    let view = model.manager.current_image.0.view().build();
+
+    let sampler = wgpu::SamplerBuilder::new().into_descriptor();
 
     // bg rect
     draw.rect()

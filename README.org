@@ -15,12 +15,13 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 :PROPERTIES:
 :CREATED:  [2023-01-10 Tue 21:31]
 :END:
-- [ ] Autocompletion related
+- [ ] Autocompletion
   - [ ] Move the cursor to the end when accepting suggestions (Not sure how to move the text cursor yet)
   - [ ] Cycle suggestions by pressing TAB
-  - [ ] Offer a dropdown like explained [[https://github.com/emilk/egui/issues/122][here]]
 - [ ] Make code more 'holistic'
   - [ ] Rely on the type system
   - [ ] Properly modelled interactions between modules
-- [ ] Get the current directory instead of reading from a file or read it from command line
 - [ ] Add a debug window for general use
+- [ ] Prompt for a path to use when no images are on the current directory and no command line arguments are provided
+  - [ ] implement =UiState= system with different screens based on state
+- [X] Get the current directory instead of reading from a file or read it from the command line
