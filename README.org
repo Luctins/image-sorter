@@ -4,8 +4,9 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 
 ** Features
 - autossugestion with persistent editable categories (press tab to accept)
-- fw/bw seek with bar
-- progress bar
+- forward/backwards seeking with bar
+- Progress bar for the current session
+- More or less cross platform (except for the open file button)
 
 ** Screenshots
 
