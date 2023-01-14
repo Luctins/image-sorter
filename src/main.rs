@@ -21,16 +21,19 @@ use clap::Parser;
 
 /*--- Global Constants ---------------------------------------------------------------------------*/
 
-const PLACEHOLDER_FILENAME: &str = "missing-image-placeholder.png";
-const DIR_TRASH: &str = "trash";
-static DIR_OUTPUT: &str = "output";
-static DIR_OTHER: &str = "separate";
+
 
 lazy_static!{
     /// Supported file types
     static ref ALLOWED_FILE_TYPES: HashSet<String> = vec![ "png", "jpg", "jpeg", "webp"]
         .drain(..).map(|v| v.to_string()).collect();
 }
+pub const TAG_SEPARATOR: &'static str = "--";
+pub const PLACEHOLDER_FILENAME: &'static str = "missing-image-placeholder.png";
+
+pub const DIR_TRASH: &'static str = "trash";
+pub const DIR_OUTPUT: &'static str = "output";
+pub const DIR_OTHER: &'static str = "separate";
 
 /*--- Impl ---------------------------------------------------------------------------------------*/
 /// Image and file manager
@@ -45,6 +48,7 @@ struct ImageManager {
 }
 
 impl ImageManager {
+
     fn new(app: &App, images_path: PathBuf) -> Self {
         let dir = images_path.clone();
         println!("images path: {dir:?}");
@@ -159,7 +163,7 @@ impl ImageManager {
             .dir
             .join(DIR_OUTPUT)
             .join(category)
-            .join(format!("{}__{}", new_name, f_str,));
+            .join(format!("{}__{}", new_name.trim_end_matches("--"), f_str,));
 
         println!("moving file: {f_full:?} -> {output:?}");
 
@@ -416,9 +420,9 @@ fn update(app: &App, model: &mut Model, update: Update) {
         ui.separator();
         {
             ui.label("Remaining files");
-            let p = 1.0 - ((manager.total_files as f32) / (manager.images.len() as f32));
+            let p = 1.0 - ((manager.images.len() as f32)/(manager.total_files as f32));
             ui.add(egui::ProgressBar::new(p).text(format!(
-                "{} / {} - {:.1} %",
+                "{} / {} - {:.2} %",
                 manager.total_files,
                 manager.images.len(),
                 p * 100.0
@@ -484,8 +488,9 @@ fn update(app: &App, model: &mut Model, update: Update) {
 
                                 // replace name with new string
                                 manager.new_name =
-                                    segments.iter().fold(String::new(), |mut acc, part| {
+                                    segments.iter().peekable().fold(String::new(), |mut acc, part| {
                                         acc.push_str(part);
+                                        acc.push_str("--");
                                         acc
                                     });
                             }

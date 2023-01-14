@@ -16,14 +16,26 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 :PROPERTIES:
 :CREATED:  [2023-01-10 Tue 21:31]
 :END:
-- [ ] Autocompletion
-  - [ ] Move the cursor to the end when accepting suggestions (Not sure how to move the text cursor yet)
-  - [ ] Cycle suggestions by pressing TAB
-- [ ] Make code more 'holistic'
-  - [ ] Rely on the type system
-  - [ ] Properly modelled interactions between modules
-- [ ] Add a debug window for general use
+*** Autocompletion
+- [ ] Move the cursor to the end when accepting suggestions (Not sure how to move the text cursor yet)
+- [ ] Cycle suggestions by pressing TAB
+*** Integration
+- [ ] Rely on the type system
+- [ ] Properly modelled interactions between modules
+*** Do and commit system
+That allows queuing actions and undoing recent actions.
+- [ ] Action
+*** Usability
 - [ ] Prompt for a path to use when no images are on the current directory and no command line arguments are provided
-  - [ ] implement =UiState= system with different screens based on state
+- [ ] More keyboard shortcuts and a shortcut detection rework (allow for mouse free operation)
+- [ ] implement =UiState= system with different screens based on state
 - [ ] Implement scrolling for very tall images
-- [X] Get the current directory instead of reading from a file or read it from the command line
+*** Misc
+:PROPERTIES:
+:CREATED:  [2023-01-14 Sat 15:15]
+:END:
+
+- [ ] Reddit banner remover ?
+
+*** Debug
+- [ ] Add a debug window for general use
