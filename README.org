@@ -16,15 +16,18 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 :PROPERTIES:
 :CREATED:  [2023-01-10 Tue 21:31]
 :END:
+*** Structural
+- [ ] Properly modelled interactions between modules
+- [ ] allow for generic categorization (not just trash + other)
+
 *** Autocompletion
 - [ ] Move the cursor to the end when accepting suggestions (Not sure how to move the text cursor yet)
 - [ ] Cycle suggestions by pressing TAB
-*** Integration
-- [ ] Rely on the type system
-- [ ] Properly modelled interactions between modules
+
 *** Do and commit system
 That allows queuing actions and undoing recent actions.
-- [ ] Action
+
+
 *** Usability
 - [ ] Prompt for a path to use when no images are on the current directory and no command line arguments are provided
 - [ ] More keyboard shortcuts and a shortcut detection rework (allow for mouse free operation)
@@ -36,6 +39,5 @@ That allows queuing actions and undoing recent actions.
 :END:
 
 - [ ] Reddit banner remover ?
-
 *** Debug
 - [ ] Add a debug window for general use
