@@ -3,7 +3,7 @@ use cached::{proc_macro::cached, SizedCache};
 use crate::*;
 
 /*--- Const --------------------------------------------------------------------------------------*/
-const TAG_SEPARATOR : &'static str = "--";
+pub const TAG_SEPARATOR: &'static str = "--";
 
 /*--- Impl ---------------------------------------------------------------------------------------*/
 

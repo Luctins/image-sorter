@@ -38,7 +38,6 @@ enum Action<'s> {
 
 /// Image and file manager
 pub struct ImageManager {
-    pub filename_buffer: String,
     pub image_index: usize,
     pub images: Vec<String>,
 
@@ -48,7 +47,7 @@ pub struct ImageManager {
     //action_history: Vec<Action<'s>>,
 
     image_current: DynamicImage,
-    image_current_texture: Option<(Arc<wgpu::Texture>, usize)>,
+    image_current_texture: Option<(Arc<wgpu::Texture>, String)>,
 }
 
 impl ImageManager {
@@ -84,7 +83,6 @@ impl ImageManager {
 
         Self {
             //action_history: Vec::new(),
-            filename_buffer: String::new(),
             image_current_texture: None,
             image_index: 0,
             total_file_count: images.len(),
@@ -164,11 +162,10 @@ impl ImageManager {
 
         std::fs::copy(&source_f, &output_path).expect("failed to save file");
 
-        std::fs::remove_file(&output_path).expect("failed to  file");
+        std::fs::remove_file(&source_f).expect("failed to  file");
 
         self.images.remove(self.image_index);
         self.reload_image();
-        self.filename_buffer.clear();
     }
 
 
@@ -181,8 +178,8 @@ impl ImageManager {
     }
 
     pub fn update_texture(&mut self, app: &App) {
-        if let Some((_, index)) = &mut self.image_current_texture {
-            if *index != self.image_index {
+        if let Some((_, name)) = &mut self.image_current_texture {
+            if *name != self.images[self.image_index] {
                 self.convert_img(app);
             }
         } else {
@@ -243,7 +240,7 @@ impl ImageManager {
         self.image_current_texture =
             Some((
                 Arc::new(wgpu::Texture::from_image(app, &self.image_current)),
-                self.image_index
+                self.images[self.image_index].clone()
             ));
     }
 }

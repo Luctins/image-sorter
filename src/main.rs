@@ -28,11 +28,18 @@ use text_suggest::TextSuggester;
 /*--- Impl ---------------------------------------------------------------------------------------*/
 
 
-/// Main user state for the application
-struct Model {
-    egui: Egui,
-    text_suggest: TextSuggester,
-    manager: ImageManager,
+structstruck::strike!{
+    /// Main user state for the application
+    struct Model {
+        egui: Egui,
+        text_suggest: TextSuggester,
+        ui_fields:
+        #[derive(Default)]
+        struct {
+            filename_buffer: String,
+        },
+        manager: ImageManager,
+    }
 }
 impl Model {
     pub fn new(app: &App, egui: Egui) -> Self {
@@ -68,6 +75,7 @@ impl Model {
         Model {
             text_suggest: TextSuggester::new(&app.assets_path().expect("cannot open project path")),
             manager: ImageManager::new(folder),
+            ui_fields: Default::default(),
             egui,
         }
     }
@@ -109,6 +117,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
     let egui = &mut model.egui;
     let manager = &mut model.manager;
     let text_suggest = &mut model.text_suggest;
+    let filename_buff = &mut model.ui_fields.filename_buffer;
 
     let mut pos = manager.image_index as f32;
     let max_img = (manager.get_images_len() - 1) as f32;
@@ -153,6 +162,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
                 let btn = c_ui.button("  \u{1F5D1}  "); // TODO: read btn state
                 if btn.clicked() {
                     manager.move_current(image_manager::dir::TRASH, "trashed");
+                    filename_buff.clear();
                 }
             }
 
@@ -171,8 +181,8 @@ fn update(app: &App, model: &mut Model, update: Update) {
                 c_ui.label("Separate");
                 let btn = c_ui.add(egui::Button::new(" \u{1F4E4} "));
                 if btn.clicked() {
-                    let name = manager.filename_buffer.clone();
-                    manager.move_current(image_manager::dir::OTHER, &name);
+                    manager.move_current(image_manager::dir::OTHER, filename_buff);
+                    filename_buff.clear();
                 }
             }
         };
@@ -200,24 +210,22 @@ fn update(app: &App, model: &mut Model, update: Update) {
         ui.separator();
         ui.label("New file name:");
         let inputbox_r = ui.add(
-            egui::TextEdit::singleline(&mut manager.filename_buffer)
+            egui::TextEdit::singleline(filename_buff)
                 .code_editor()
                 .hint_text("New filename")
                 .lock_focus(true), //.cursor_at_end(true)
         );
 
+        let seg_buff = filename_buff.clone();
+        let mut segments = text_suggest::get_segments(&seg_buff);
 
-        let mut segments = text_suggest::get_segments(&manager.filename_buffer);
-
-        // let suggestions: Vec<String> = {
-        //     // TODO: add constant for separator
-
-        //     let suggestions = if let Some(segment) = segments.last() {
-        //         text_suggest.get_suggestions(&segment)
-        //     } else {
-        //         vec![]
-        //     };
-
+         let suggestions: Vec<String> = {
+             if let Some(segment) = segments.last() {
+                text_suggest.get_suggestions(&segment)
+            } else {
+                vec![]
+            }
+         };
 
 
         //     // let popup_id = ui.make_persistent_id("suggestions_box");
@@ -232,57 +240,65 @@ fn update(app: &App, model: &mut Model, update: Update) {
         //     //     }
         //     // });
 
+        // detect confirmation
+        let k = ui.input();
 
-        //     // detect confirmation
-        //     if let Some(k) = ui.input().keys_down.iter().next() {
-        //         if text_suggest.last_key_changed(*k) {
-        //             match k {
-        //                 egui::Key::Enter => {
-        //                     if inputbox_r.lost_focus() {
-        //                         let name = manager.filename_buffer.clone();
-        //                         manager.move_current(app, DIR_OUTPUT, &name);
-        //                         inputbox_r.request_focus();
-        //                     }
-        //                 }
-        //                 egui::Key::Tab => {
-        //                     // both replacement and destination are not empty
-        //                     if let (Some(replacement), Some(dest)) =
-        //                         (suggestions.first(), segments.last_mut())
-        //                     {
-        //                         *dest = replacement.to_string();
-        //                         println!("completion: {replacement:?}");
+        if inputbox_r.lost_focus() && k.key_pressed(egui::Key::Enter) {
+            manager.move_current(image_manager::dir::OUTPUT, &filename_buff);
+            filename_buff.clear();
+            inputbox_r.request_focus();
+        };
 
-        //                         // replace name with new string
-        //                         manager.filename_buffer =
-        //                             segments.iter().peekable().fold(String::new(), |mut acc, part| {
-        //                                 acc.push_str(part);
-        //                                 acc.push_str("--");
-        //                                 acc
-        //                             });
-        //                     }
-        //                 }
-        //                 _ => {}
-        //             }
-        //         }
-        //     }
-        //     suggestions
-        // };
+        // tab pressed
+        if k.key_released(egui::Key::Tab) {
 
-        // let mut suggestions_iter = suggestions.iter();
-        // let first: String = suggestions_iter
-        //     .next()
-        //     .map(|i| i.clone())
-        //     .unwrap_or(" ".to_string());
+            if let (Some(replacement), Some(dest)) =
+                (suggestions.first(), segments.last_mut())
+            {
+                *dest = replacement;
 
-        // let _lab_h = ui.label(format!(
-        //     "Suggestions: {}",
-        //     suggestions_iter.take(2)
-        //         .fold(first, |mut res, item| {
-        //             res.push_str(", ");
-        //             res.push_str(item);
-        //             res
-        //     })
-        // ));
+                // get the new segment and cycle try cycling between options
+                // if let Some(ref mut sel) = dbg!(text_suggest.current_selection) {
+                //     if let Some(sug_next) = &suggestions.get(*sel + 1) {
+                //         *sel += 1;
+                //         sug_next
+                //     } else {
+                //         dbg!(*sel);
+                //         *sel = 0;
+                //         replacement
+                //     }
+                // } else {
+                //     text_suggest.current_selection = Some(0);
+                //     replacement
+                // };
+
+                println!("completion: {replacement:?}");
+
+                // replace name with new string
+                *filename_buff =
+                    segments.iter().fold(String::new(), |mut acc, part| {
+                        acc.push_str(part);
+                        acc.push_str(text_suggest::TAG_SEPARATOR);
+                        acc
+                    });
+            }
+        }
+
+        let mut suggestions_iter = suggestions.iter();
+        let first: String = suggestions_iter
+            .next()
+            .map(|i| i.clone())
+            .unwrap_or(" ".to_string());
+
+        ui.label(
+            format!("Suggestions: {}",
+            suggestions_iter.take(2)
+                    .fold(first, |mut res, item| {
+                        res.push_str(", ");
+                        res.push_str(item);
+                        res
+                    })
+            ));
 
         // new category box
         ui.separator();
