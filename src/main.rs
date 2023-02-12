@@ -3,7 +3,12 @@
 /*--- Imports ------------------------------------------------------------------------------------*/
 
 #![allow(unused_imports)]
-use std::{collections::{HashSet, HashMap}, fs::ReadDir, path::PathBuf, sync::Arc};
+use std::{
+    fs::{self, ReadDir},
+    collections::{HashSet, HashMap},
+    path::PathBuf,
+    sync::Arc
+};
 
 pub use nannou::prelude::*;
 pub use nannou_egui::{
@@ -11,7 +16,6 @@ pub use nannou_egui::{
     egui::{self, Response, TextBuffer, TextEdit, color::rgb_from_hsv},
     Egui,
 };
-
 
 use serde::{Deserialize, Serialize};
 
@@ -25,59 +29,106 @@ use text_suggest::TextSuggester;
 
 /*--- Global Constants ---------------------------------------------------------------------------*/
 
+const LOCAL_CONFIG_FOLDER: &'static str = ".image-sort";
+const DEFAULT_LAYOUT_S: &'static str = std::include_str!("../assets/cfg/default-layout.json");
+
+pub const TAG_SEPARATOR: &'static str = "--";
+
+lazy_static::lazy_static!{
+    static ref DEFAULT_LAYOUT: Config = json5::from_str(DEFAULT_LAYOUT_S)
+        .expect("failed to parse default configuration");
+}
+
 /*--- Impl ---------------------------------------------------------------------------------------*/
 
 
+// model
 structstruck::strike!{
     /// Main user state for the application
     struct Model {
         egui: Egui,
+
+        config:
+        #[derive(Debug, Clone, Deserialize, Serialize)]
+        pub struct {
+            default_folder: String,
+            buttons:
+            HashMap<String,
+            #[derive(Debug, Clone, Deserialize, Serialize)]
+            pub struct ButtonConfig {
+                label: String,
+                button_label: String,
+                path: String,
+            }>,
+        },
+
         text_suggest: TextSuggester,
+
+        image_manager: ImageManager,
+
         ui_fields:
         #[derive(Default)]
-        struct {
-            filename_buffer: String,
+        pub struct {
+            destination_filename: String,
+            // new_category: String,
         },
-        manager: ImageManager,
     }
 }
 impl Model {
     pub fn new(app: &App, egui: Egui) -> Self {
         use clap::error::{self, ErrorKind, Error};
 
-        let r = Args::try_parse();
+        let folder = Args::try_parse()
+            .map(|a| a.folder)
+            .map_err(|e| match e.kind() {
+                         ErrorKind::MissingRequiredArgument => {
+                             println!("using current dir as fallback");
+                             std::env::current_dir()
+                                 .expect("cannot read current dir but no args provided")
+                         },
 
-        let folder = match r {
-            Ok(a) => {
-                a.folder
-            },
-            Err(ref e) => {
-                match e.kind() {
-                    ErrorKind::MissingRequiredArgument => {
-                        println!("using current dir as fallback");
-                        std::env::current_dir()
-                            .expect("cannot read current dir but no args provided")
-                    },
+                         ErrorKind::DisplayHelp => {
+                             println!("{e}");
+                             std::process::exit(0);
+                         },
 
-                    ErrorKind::DisplayHelp => {
-                        println!("{e}");
-                        std::process::exit(0);
-                    },
+                         _ => {
+                             panic!("unsupported");
+                         }
+                }).unwrap();
 
-                    _ => {
-                        let _ = r.unwrap();
-                        unreachable!("unsupported");
-                    }
-                }
-            },
+        // load configuration of default value
+        let config = {
+            let p = folder.join(LOCAL_CONFIG_FOLDER);
+            let cfg_str = fs::read_to_string(&p)
+                .map_err(|e| {
+                    // TODO: copy default config to the cwd
+                    println!("no local config present at {p:?}, {e}");
+                    e
+                })
+
+                .unwrap_or(DEFAULT_LAYOUT_S.to_string());
+
+            let c:Config = json5::from_str(&cfg_str)
+                .map_err(|e| {
+                    println!("failed to parse configuration: {e}, using default");
+                    e
+                }).unwrap_or(DEFAULT_LAYOUT.clone());
+
+            println!("configuration: {c:?}");
+            c
         };
 
         Model {
-            text_suggest: TextSuggester::new(&app.assets_path().expect("cannot open project path")),
-            manager: ImageManager::new(folder),
+            image_manager: ImageManager::new(&folder, &config),
+            text_suggest: TextSuggester::new(&folder),
+
+            // init to empty
             ui_fields: Default::default(),
+            config,
             egui,
         }
+
     }
 }
 
@@ -115,9 +166,10 @@ fn model(app: &App) -> Model {
 /// Window update fn
 fn update(app: &App, model: &mut Model, update: Update) {
     let egui = &mut model.egui;
-    let manager = &mut model.manager;
+    let manager = &mut model.image_manager;
     let text_suggest = &mut model.text_suggest;
-    let filename_buff = &mut model.ui_fields.filename_buffer;
+    let config = &model.config;
+    let filename_buff = &mut model.ui_fields.destination_filename;
 
     let mut pos = manager.image_index as f32;
     let max_img = (manager.get_images_len() - 1) as f32;
@@ -125,9 +177,10 @@ fn update(app: &App, model: &mut Model, update: Update) {
     egui.set_elapsed_time(update.since_start);
     let egui_context = egui.begin_frame();
 
+    //ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+
     // GUI layout
     egui::TopBottomPanel::bottom("File Control").show(&egui_context, |ui| {
-        //ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
 
         ui.label(format!("current image: {}", manager.get_current_filename()));
 
@@ -158,12 +211,12 @@ fn update(app: &App, model: &mut Model, update: Update) {
                     manager.prev_image();
                 }
 
-                c_ui.label("Trash");
-                let btn = c_ui.button("  \u{1F5D1}  "); // TODO: read btn state
-                if btn.clicked() {
-                    manager.move_current(image_manager::dir::TRASH, "trashed");
-                    filename_buff.clear();
-                }
+                // c_ui.label("Trash");
+                // let btn = c_ui.button("  \u{1F5D1}  "); // TODO: read btn state
+                // if btn.clicked() {
+                //     manager.move_current(image_manager::dir::TRASH, "trashed");
+                //     filename_buff.clear();
+                // }
             }
 
             {
@@ -178,14 +231,15 @@ fn update(app: &App, model: &mut Model, update: Update) {
                     manager.next_image()
                 }
 
-                c_ui.label("Separate");
-                let btn = c_ui.add(egui::Button::new(" \u{1F4E4} "));
-                if btn.clicked() {
-                    manager.move_current(image_manager::dir::OTHER, filename_buff);
-                    filename_buff.clear();
-                }
+                // c_ui.label("Separate");
+                // let btn = c_ui.add(egui::Button::new(" \u{1F4E4} "));
+                // if btn.clicked() {
+                //     manager.move_current(image_manager::dir::OTHER, filename_buff);
+                //     filename_buff.clear();
+                // }
             }
         };
+
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             ui.columns(2, create_buttons)
         });
@@ -317,6 +371,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
             }
         });
     });
+
     manager.update_texture(app);
 }
 
@@ -330,7 +385,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let win = app.window_rect();
     let canvas = Rect::from(win.clone()).top_left_of(win).pad_bottom(300.0);
 
-    let img_texture = model.manager.get_texture();
+    let img_texture = model.image_manager.get_texture();
 
     let [img_w, img_h] = img_texture.size();
 

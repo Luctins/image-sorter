@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 cached = "0.42.0"
 clap = { version = "4.0.32", features = ["derive"] }
+json5 = "0.4.1"
 lazy_static = "1.4.0"
 nannou = "0.18"
 nannou_egui = "0.5.0"

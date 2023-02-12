@@ -1,3 +1,7 @@
+//! Manages and shows image files
+
+/*--- Use ----------------------------------------------------------------------------------------*/
+
 use std::{collections::{HashSet, HashMap}, fs::ReadDir, path::{Path, PathBuf}, sync::Arc};
 use lazy_static::{lazy_static, __Deref};
 
@@ -51,10 +55,11 @@ pub struct ImageManager {
 }
 
 impl ImageManager {
-    pub const TAG_SEPARATOR: &'static str = "--";
-    pub const PLACEHOLDER_FILENAME: &'static str = "missing-image-placeholder.png";
 
-    pub fn new(images_path: PathBuf) -> Self {
+    // pub const PLACEHOLDER_FILENAME: &'static str = "missing-image-placeholder.png";
+
+    pub fn new(images_path: &PathBuf, config: &Config) -> Self {
+
         let dir = images_path.clone();
         println!("images path: {dir:?}");
 
