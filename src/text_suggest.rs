@@ -4,9 +4,16 @@ use crate::*;
 
 /*--- Const --------------------------------------------------------------------------------------*/
 pub const TAG_SEPARATOR: &'static str = "--";
+pub const CATEGORIES_FILE_NAME: &'static str = "categories.json";
+pub const DEFAULT_CATEGORIES_S: &'static str =
+    std::include_str!("../assets/cfg/default-categories.json");
+
+lazy_static::lazy_static!{
+    static ref DEFAULT_CATEGORIES:HashSet<String> = serde_json::from_str(DEFAULT_CATEGORIES_S)
+        .expect("failed to parse default configuration");
+}
 
 /*--- Impl ---------------------------------------------------------------------------------------*/
-
 
 
 /// Text suggestion engine
@@ -21,18 +28,36 @@ pub struct TextSuggester {
 
 impl TextSuggester {
     pub fn new(config_path: &PathBuf) -> Self {
-        let config_path = config_path.join("cfg").join("categories.json");
+        let config_path = config_path.join(CATEGORIES_FILE_NAME);
         println!("categories config path: {config_path:?}");
-
-        let categories =
-            std::fs::read_to_string(&config_path).expect("failed to read preference file");
-        println!("categories: {categories}");
 
         Self {
             //last_key: None,
             current_selection: None,
-            categories: serde_json::from_str(&categories)
-                .expect("cannot parse categories preference file"),
+            categories: {
+                use std::io::ErrorKind;
+
+                match std::fs::read_to_string(&config_path) {
+                    Ok(categories) => {
+                        println!("categories: {categories}");
+                        serde_json::from_str(&categories)
+                            .expect("cannot parse categories preference file")
+                    },
+
+                    Err(e) => {
+                        match e.kind() {
+                            ErrorKind::NotFound => {
+                                println!("no configuration found, defaulting to empty");
+                                DEFAULT_CATEGORIES.clone()
+                            },
+
+                            _ => {
+                                panic!("failed to read preference file: {e}");
+                            }
+                        }
+                    }
+                }
+            },
             new_category_buffer: String::new(),
             config_path,
         }

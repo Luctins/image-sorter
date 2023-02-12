@@ -29,7 +29,9 @@ use text_suggest::TextSuggester;
 
 /*--- Global Constants ---------------------------------------------------------------------------*/
 
-const LOCAL_CONFIG_FOLDER: &'static str = ".image-sort";
+const LOCAL_CONFIG_FOLDER: &'static str = ".image-sorter";
+const CONFIG_FILE_NAME: &'static str = "layout.json";
+
 const DEFAULT_LAYOUT_S: &'static str = std::include_str!("../assets/cfg/default-layout.json");
 
 pub const TAG_SEPARATOR: &'static str = "--";
@@ -56,9 +58,9 @@ structstruck::strike!{
             HashMap<String,
             #[derive(Debug, Clone, Deserialize, Serialize)]
             pub struct ButtonConfig {
-                label: String,
-                button_label: String,
-                path: String,
+                pub label: String,
+                pub button_label: String,
+                pub path: String,
             }>,
         },
 
@@ -97,13 +99,19 @@ impl Model {
                          }
                 }).unwrap();
 
+        let cfg_path = folder.join(LOCAL_CONFIG_FOLDER);
+
         // load configuration of default value
         let config = {
-            let p = folder.join(LOCAL_CONFIG_FOLDER);
+            let p = folder.join(LOCAL_CONFIG_FOLDER).join(CONFIG_FILE_NAME);
             let cfg_str = fs::read_to_string(&p)
                 .map_err(|e| {
                     // TODO: copy default config to the cwd
                     println!("no local config present at {p:?}, {e}");
+                    std::fs::create_dir_all(&cfg_path)
+                        .map(|ok| {println!("created default config folder: {cfg_path:?}"); ok})
+                        .expect(
+                            format!("failed to create config dir: {LOCAL_CONFIG_FOLDER}").as_str());
                     e
                 })
 
@@ -121,7 +129,7 @@ impl Model {
 
         Model {
             image_manager: ImageManager::new(&folder, &config),
-            text_suggest: TextSuggester::new(&folder),
+            text_suggest: TextSuggester::new(&cfg_path),
 
             // init to empty
             ui_fields: Default::default(),
@@ -202,7 +210,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
             }
         });
 
-        let create_buttons = |col: &mut [egui::Ui]| {
+        let create_movement_buttons = |col: &mut [egui::Ui]| {
             {
                 let c_ui = &mut col[0];
                 c_ui.label("Prev");
@@ -218,7 +226,6 @@ fn update(app: &App, model: &mut Model, update: Update) {
                 //     filename_buff.clear();
                 // }
             }
-
             {
                 let c_ui = &mut col[1];
                 c_ui.label("Next");
@@ -241,7 +248,29 @@ fn update(app: &App, model: &mut Model, update: Update) {
         };
 
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-            ui.columns(2, create_buttons)
+            ui.columns(2, create_movement_buttons)
+        });
+
+        let create_buttons = |col: &mut [egui::Ui]| {
+             {
+                 let mut pos = 0;
+                 // TODO: add keyboard shortcuts using C - 'button ids'
+                 // TODO: allow for reordering buttons with a configuration field
+                 for (_button_id, button_cfg) in &config.buttons {
+                     let c_ui = &mut col[pos];
+                     pos += 1;
+
+                     c_ui.label(&button_cfg.label);
+                     let btn = c_ui.button(format!("  {}  ", button_cfg.button_label));
+                     if btn.clicked() {
+                         manager.move_current(&button_cfg.path, &filename_buff);
+                         filename_buff.clear();
+                     }
+                 }
+            }
+        };
+        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+            ui.columns(config.buttons.len(), create_buttons)
         });
 
         // Progress bar
@@ -298,7 +327,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
         let k = ui.input();
 
         if inputbox_r.lost_focus() && k.key_pressed(egui::Key::Enter) {
-            manager.move_current(image_manager::dir::OUTPUT, &filename_buff);
+            manager.move_current(&config.default_folder, &filename_buff);
             filename_buff.clear();
             inputbox_r.request_focus();
         };

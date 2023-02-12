@@ -12,13 +12,6 @@ use crate::*;
 
 /*--- Const --------------------------------------------------------------------------------------*/
 
-pub mod dir {
-    pub const TRASH: &'static str = "trash";
-    pub const OUTPUT: &'static str = "output";
-    pub const OTHER: &'static str = "separate";
-
-    pub const DIRS: [&'static str; 3] = [TRASH, OUTPUT, OTHER];
-}
 
 /*--- Impl ---------------------------------------------------------------------------------------*/
 
@@ -26,18 +19,9 @@ lazy_static!{
     /// Supported file types
     static ref ALLOWED_FILE_TYPES: HashSet<String> = vec![ "png", "jpg", "jpeg", "webp"]
         .drain(..).map(|v| v.to_string()).collect();
+
     static ref PLACEHOLDER_BUF: &'static [u8] =
         std::include_bytes!("../assets/img/placeholder.bmp");
-}
-
-enum Action<'s> {
-    /// in the end all actions are moves
-    Move {
-        source: &'s str,
-        destination: &'s str,
-    },
-    //Undo(&Self),
-    //Redo(&Self),
 }
 
 /// Image and file manager
@@ -47,9 +31,7 @@ pub struct ImageManager {
 
     total_file_count: usize,
     dir: PathBuf,
-
-    //action_history: Vec<Action<'s>>,
-
+    default_path: PathBuf,
     image_current: DynamicImage,
     image_current_texture: Option<(Arc<wgpu::Texture>, String)>,
 }
@@ -67,19 +49,21 @@ impl ImageManager {
         let images = Self::get_file_list(&dir);
 
         if images.len() == 0 {
-            eprintln!("no supported files in current directory: {dir:?}");
-
             // TODO: show error message on the interface? (would require proper errors for this)
-
+            eprintln!("no supported files in current directory: {dir:?}");
             std::process::exit(1);
         }
-
-        for d in dir::DIRS {
-            std::fs::create_dir_all(dir.join("output").join(d))
-                .expect(format!("failed to create output directory {d}").as_str());
-        }
-
         println!("file count: {}", images.len());
+
+
+        let i = config.buttons.iter()
+            .map(|(_, ButtonConfig { path, ..})| path.as_str())
+            .chain(std::iter::once(config.default_folder.as_str()));
+
+        for path in i {
+            std::fs::create_dir_all(dir.join(path))
+                .expect(format!("failed to create output directory {path}").as_str());
+        }
 
         let image_path = dir.join(&images[0]);
         println!("first image: {image_path:?}");
@@ -87,7 +71,7 @@ impl ImageManager {
         //wgpu::Texture::from_path(app, image_path).unwrap();
 
         Self {
-            //action_history: Vec::new(),
+            default_path: PathBuf::from(&config.default_folder),
             image_current_texture: None,
             image_index: 0,
             total_file_count: images.len(),
@@ -159,7 +143,7 @@ impl ImageManager {
 
         let output_path = self
             .dir
-            .join(dir::OUTPUT)
+            .join(&self.default_path)
             .join(category)
             .join(format!("{}__{}", new_name.trim_end_matches("--"), f_str));
 
