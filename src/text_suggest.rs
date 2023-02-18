@@ -1,12 +1,18 @@
-use std::{path::PathBuf, collections::{HashSet, HashMap}};
+//! Suggestion engine
+
+use std::{path::PathBuf, collections::{HashSet, HashMap}, io::prelude::*};
+
 use cached::{proc_macro::cached, SizedCache};
+
 use crate::*;
 
 /*--- Const --------------------------------------------------------------------------------------*/
 pub const TAG_SEPARATOR: &'static str = "--";
+
 pub const CATEGORIES_FILE_NAME: &'static str = "categories.json";
+
 pub const DEFAULT_CATEGORIES_S: &'static str =
-    std::include_str!("../assets/cfg/default-categories.json");
+    std::include_str!("../assets/cfg/categories.json.template");
 
 lazy_static::lazy_static!{
     static ref DEFAULT_CATEGORIES:HashSet<String> = serde_json::from_str(DEFAULT_CATEGORIES_S)
@@ -27,8 +33,9 @@ pub struct TextSuggester {
 }
 
 impl TextSuggester {
-    pub fn new(config_path: &PathBuf) -> Self {
-        let config_path = config_path.join(CATEGORIES_FILE_NAME);
+    pub fn new<P: AsRef<Path>>(config_path: P) -> Self {
+        let _config_path = config_path.as_ref();
+        let config_path = _config_path.join(CATEGORIES_FILE_NAME);
         println!("categories config path: {config_path:?}");
 
         Self {
@@ -47,7 +54,10 @@ impl TextSuggester {
                     Err(e) => {
                         match e.kind() {
                             ErrorKind::NotFound => {
-                                println!("no configuration found, defaulting to empty");
+                                print!("no configuration found, using default ");
+                                println!("and copying default config file to ");
+
+                                crate::copy_default(&config_path, &DEFAULT_CATEGORIES_S);
                                 DEFAULT_CATEGORIES.clone()
                             },
 

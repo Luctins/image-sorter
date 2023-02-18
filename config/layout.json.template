@@ -1,0 +1,18 @@
+// -*- mode: jsonc -*-
+{
+    default_folder: "output",
+
+    buttons: {
+        t: {
+            label: "trash",
+            button_label: "🗑",
+            path: "trash",
+        },
+
+        s: {
+            label: "Separate",
+            button_label: "📤",
+            path: "other",
+        },
+    }
+}

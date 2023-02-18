@@ -143,7 +143,6 @@ impl ImageManager {
 
         let output_path = self
             .dir
-            .join(&self.default_path)
             .join(category)
             .join(format!("{}__{}", new_name.trim_end_matches("--"), f_str));
 

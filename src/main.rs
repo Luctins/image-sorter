@@ -4,9 +4,10 @@
 
 #![allow(unused_imports)]
 use std::{
+    io::{self, prelude::*, Error},
     fs::{self, ReadDir},
     collections::{HashSet, HashMap},
-    path::PathBuf,
+    path::{PathBuf, Path},
     sync::Arc
 };
 
@@ -32,7 +33,7 @@ use text_suggest::TextSuggester;
 const LOCAL_CONFIG_FOLDER: &'static str = ".image-sorter";
 const CONFIG_FILE_NAME: &'static str = "layout.json";
 
-const DEFAULT_LAYOUT_S: &'static str = std::include_str!("../assets/cfg/default-layout.json");
+const DEFAULT_LAYOUT_S: &'static str = std::include_str!("../assets/cfg/layout.json.template");
 
 pub const TAG_SEPARATOR: &'static str = "--";
 
@@ -43,6 +44,28 @@ lazy_static::lazy_static!{
 
 /*--- Impl ---------------------------------------------------------------------------------------*/
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg()]
+    folder: PathBuf,
+}
+
+/// Copy default content to a file (only if it doesn't exists)
+pub fn copy_default<P: AsRef<Path>, C: AsRef<str>>(path: P, content: C) {
+    let path = path.as_ref();
+    let content = content.as_ref();
+
+    let _ = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&path)
+        .map(|mut f|
+             f.write(content.as_bytes())
+             .map_err(|e| eprintln!("failed to write {path:?} : {e}"))
+        )
+        .map_err(|e| eprintln!("failed to create {path:?} : {e}"));
+}
 
 // model
 structstruck::strike!{
@@ -76,28 +99,35 @@ structstruck::strike!{
         },
     }
 }
+
 impl Model {
-    pub fn new(app: &App, egui: Egui) -> Self {
+    pub fn new(_app: &App, egui: Egui) -> Self {
         use clap::error::{self, ErrorKind, Error};
 
-        let folder = Args::try_parse()
-            .map(|a| a.folder)
-            .map_err(|e| match e.kind() {
-                         ErrorKind::MissingRequiredArgument => {
-                             println!("using current dir as fallback");
-                             std::env::current_dir()
-                                 .expect("cannot read current dir but no args provided")
-                         },
+        let folder =
+            match Args::try_parse() {
+                Ok(a) => a.folder,
+                Err(e) => {
+                    match e.kind() {
+                        ErrorKind::MissingRequiredArgument => {
+                            println!("using current dir as fallback");
+                            std::env::current_dir()
+                                .expect("cannot read current dir but no args provided")
+                                .to_path_buf()
+                        },
 
-                         ErrorKind::DisplayHelp => {
-                             println!("{e}");
-                             std::process::exit(0);
-                         },
+                        ErrorKind::DisplayHelp => {
+                            println!("{e}");
+                            std::process::exit(0);
+                        },
 
-                         _ => {
-                             panic!("unsupported");
-                         }
-                }).unwrap();
+                        _ => {
+                            panic!("unsupported");
+                        }
+                    }
+                }
+            };
+
 
         let cfg_path = folder.join(LOCAL_CONFIG_FOLDER);
 
@@ -107,11 +137,21 @@ impl Model {
             let cfg_str = fs::read_to_string(&p)
                 .map_err(|e| {
                     // TODO: copy default config to the cwd
-                    println!("no local config present at {p:?}, {e}");
+                    println!("no local config present at {p:?}, {e}; ");
+                    println!("creating config folder '{cfg_path:?}'");
+
+                    let layout_path = cfg_path.join(CONFIG_FILE_NAME);
+
+
                     std::fs::create_dir_all(&cfg_path)
                         .map(|ok| {println!("created default config folder: {cfg_path:?}"); ok})
                         .expect(
                             format!("failed to create config dir: {LOCAL_CONFIG_FOLDER}").as_str());
+
+                    println!("copying default layout file to config folder '{layout_path:?}'");
+
+                    crate::copy_default(&layout_path, DEFAULT_LAYOUT_S);
+
                     e
                 })
 
@@ -122,6 +162,12 @@ impl Model {
                     println!("failed to parse configuration: {e}, using default");
                     e
                 }).unwrap_or(DEFAULT_LAYOUT.clone());
+
+            // TODO: implement keyboard shortcuts first or some kind
+            // of 'fast sort mode' with single key commands (vim-like)
+            // for (id, button) in &mut c.buttons {
+            //     button.label.replace(&button.label.replacen(id, &format!("[{}]", id), 1));
+            // }
 
             println!("configuration: {c:?}");
             c
@@ -138,13 +184,6 @@ impl Model {
         }
 
     }
-}
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    #[arg()]
-    folder: PathBuf,
 }
 
 /*--- Main application ---------------------------------------------------------------------------*/
@@ -251,11 +290,13 @@ fn update(app: &App, model: &mut Model, update: Update) {
             ui.columns(2, create_movement_buttons)
         });
 
+
         let create_buttons = |col: &mut [egui::Ui]| {
              {
                  let mut pos = 0;
                  // TODO: add keyboard shortcuts using C - 'button ids'
                  // TODO: allow for reordering buttons with a configuration field
+                 // (currently based hashmap keys order afaik)
                  for (_button_id, button_cfg) in &config.buttons {
                      let c_ui = &mut col[pos];
                      pos += 1;
@@ -326,11 +367,13 @@ fn update(app: &App, model: &mut Model, update: Update) {
         // detect confirmation
         let k = ui.input();
 
-        if inputbox_r.lost_focus() && k.key_pressed(egui::Key::Enter) {
-            manager.move_current(&config.default_folder, &filename_buff);
-            filename_buff.clear();
-            inputbox_r.request_focus();
-        };
+        if inputbox_r.lost_focus() {
+            if k.key_pressed(egui::Key::Enter) {
+                manager.move_current(&config.default_folder, &filename_buff);
+                filename_buff.clear();
+                inputbox_r.request_focus();
+            }
+        }
 
         // tab pressed
         if k.key_released(egui::Key::Tab) {
