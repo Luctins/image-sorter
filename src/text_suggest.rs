@@ -11,8 +11,7 @@ pub const TAG_SEPARATOR: &'static str = "--";
 
 pub const CATEGORIES_FILE_NAME: &'static str = "categories.json";
 
-pub const DEFAULT_CATEGORIES_S: &'static str =
-    std::include_str!("../assets/cfg/categories.json.template");
+pub use super::DEFAULT_CATEGORIES_S;
 
 lazy_static::lazy_static!{
     static ref DEFAULT_CATEGORIES:HashSet<String> = serde_json::from_str(DEFAULT_CATEGORIES_S)

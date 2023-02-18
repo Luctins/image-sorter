@@ -33,13 +33,18 @@ use text_suggest::TextSuggester;
 const LOCAL_CONFIG_FOLDER: &'static str = ".image-sorter";
 const CONFIG_FILE_NAME: &'static str = "layout.json";
 
-const DEFAULT_LAYOUT_S: &'static str = std::include_str!("../assets/cfg/layout.json.template");
+pub const DEFAULT_LAYOUT_S: &'static str = std::include_str!("../config/layout.json.template");
+pub const DEFAULT_CATEGORIES_S: &'static str =
+    std::include_str!("../config/categories.json.template");
 
 pub const TAG_SEPARATOR: &'static str = "--";
 
 lazy_static::lazy_static!{
     static ref DEFAULT_LAYOUT: Config = json5::from_str(DEFAULT_LAYOUT_S)
         .expect("failed to parse default configuration");
+
+    pub static ref PLACEHOLDER_BUF: &'static [u8] =
+        std::include_bytes!("../assets/placeholder.bmp");
 }
 
 /*--- Impl ---------------------------------------------------------------------------------------*/

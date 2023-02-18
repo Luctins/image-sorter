@@ -12,17 +12,14 @@ use crate::*;
 
 /*--- Const --------------------------------------------------------------------------------------*/
 
-
-/*--- Impl ---------------------------------------------------------------------------------------*/
-
 lazy_static!{
     /// Supported file types
     static ref ALLOWED_FILE_TYPES: HashSet<String> = vec![ "png", "jpg", "jpeg", "webp"]
         .drain(..).map(|v| v.to_string()).collect();
-
-    static ref PLACEHOLDER_BUF: &'static [u8] =
-        std::include_bytes!("../assets/img/placeholder.bmp");
 }
+
+/*--- Impl ---------------------------------------------------------------------------------------*/
+
 
 /// Image and file manager
 pub struct ImageManager {
