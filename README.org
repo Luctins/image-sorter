@@ -21,16 +21,16 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 *** Autocompletion
 - Move the cursor to the end when accepting suggestions (Not sure how to move the text cursor yet)
 - Cycle suggestions by pressing TAB
--
+
 *** Do and commit system
 - That allows queuing actions and undoing recent actions.
--
+
 *** Usability
 - Add keyboard shortcuts based on the layout configuration
   - e.g `C- [key id]` to move to that category.
 - Implement =UiState= system with different screens based on state
 - Implement scrolling for very tall/wide images
--
+
 *** Misc
 - Reddit banner remover ?
 
