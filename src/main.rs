@@ -89,6 +89,8 @@ structstruck::strike!{
                 pub label: String,
                 pub button_label: String,
                 pub path: String,
+                // #[serde(deserialize_with = "")]
+                // pub shortcut: Key,
             }>,
         },
 
@@ -147,7 +149,6 @@ impl Model {
 
                     let layout_path = cfg_path.join(CONFIG_FILE_NAME);
 
-
                     std::fs::create_dir_all(&cfg_path)
                         .map(|ok| {println!("created default config folder: {cfg_path:?}"); ok})
                         .expect(
@@ -162,11 +163,52 @@ impl Model {
 
                 .unwrap_or(DEFAULT_LAYOUT_S.to_string());
 
-            let c:Config = json5::from_str(&cfg_str)
+            let mut c:Config = json5::from_str(&cfg_str)
                 .map_err(|e| {
                     println!("failed to parse configuration: {e}, using default");
                     e
                 }).unwrap_or(DEFAULT_LAYOUT.clone());
+            c.buttons = {
+                let mut tmp = c.buttons.drain().collect::<Vec<_>>();
+                tmp.sort_by(|prev, next| prev.0.cmp(&next.0));
+                tmp.into_iter().collect()
+            };
+
+            // // make sure the trash button exists
+            // _ = c.buttons.insert(
+            //     "k".to_string(),
+            //     ButtonConfig {
+            //         button_label: "\u{1F5D1}".to_string(), // wastebasket symbol
+            //         label: "Trash".to_string(),
+            //         path: "trash".to_string(),
+            //     });
+
+            // c.buttons.iter_mut().for_each(|(b_id, b_cfg)| {
+            //     let old = b_cfg.label.clone();
+
+            //     let (up, low) = {
+            //         let c = b_id.chars().next().unwrap();
+            //         (c.to_ascii_lowercase(), c.to_ascii_uppercase())
+            //     };
+
+
+            //     let new =  {
+            //         let new = old.replacen(low, format!("[{}]", low).as_str(), 1);
+            //         if new == old {
+            //             old.replacen(up, format!("[{}]", up).as_str(), 1)
+            //         } else {
+            //             new
+            //         }
+            //     };
+
+            //     b_cfg.label.replace(
+            //         if new == old {
+            //             format!("{}: [{}]", old, b_id)
+            //         } else {
+            //             new
+            //         }.as_str()
+            //     );
+            // });
 
             // TODO: implement keyboard shortcuts first or some kind
             // of 'fast sort mode' with single key commands (vim-like)
@@ -215,10 +257,11 @@ fn model(app: &App) -> Model {
     Model::new(app, egui)
 }
 
-/// Window update fn
+/// Window and GUI update fn
 fn update(app: &App, model: &mut Model, update: Update) {
     let egui = &mut model.egui;
     let manager = &mut model.image_manager;
+
     let text_suggest = &mut model.text_suggest;
     let config = &model.config;
     let filename_buff = &mut model.ui_fields.destination_filename;
@@ -233,6 +276,48 @@ fn update(app: &App, model: &mut Model, update: Update) {
 
     // GUI layout
     egui::TopBottomPanel::bottom("File Control").show(&egui_context, |ui| {
+
+        // Command detection
+        // {
+            // let input_state = ui.input();
+
+        //     for ev in &input_state.raw.events {
+        //         match ev {
+        //             egui::Event::Key {
+        //                 key,
+        //                 pressed: true,
+        //                 modifiers: egui::Modifiers { command, ..},
+        //             } => {
+        //                 // fixed delete key
+        //                 match key {
+        //                     // egui::Key::Delete => {
+        //                     //     let btn_cfg = config.buttons.get("t").unwrap();
+        //                     //     manager.move_current(&btn_cfg.path, filename_buff);
+        //                     // },
+
+        //                     // egui::Key::ArrowDown | egui::Key::ArrowLeft => {
+        //                     //     manager.prev_image();
+        //                     // },
+
+        //                     // egui::Key::ArrowUp | egui::Key::ArrowRight => {
+        //                     //     manager.next_image();
+        //                     // },
+
+        //                     _ => {
+        //                         if *command {
+        //                             let id:&str = dbg!(stringify!(key));
+        //                             if let Some(btn_cfg) = config.buttons.get(id) {
+        //                                 manager.move_current(&btn_cfg.path, filename_buff);
+        //                             }
+        //                         }
+        //                     }
+        //                 }
+
+        //             },
+        //             _ => {},
+        //         }
+        //     }
+        // }
 
         ui.label(format!("current image: {}", manager.get_current_filename()));
 
@@ -295,7 +380,6 @@ fn update(app: &App, model: &mut Model, update: Update) {
             ui.columns(2, create_movement_buttons)
         });
 
-
         let create_buttons = |col: &mut [egui::Ui]| {
              {
                  let mut pos = 0;
@@ -305,16 +389,16 @@ fn update(app: &App, model: &mut Model, update: Update) {
                  for (_button_id, button_cfg) in &config.buttons {
                      let c_ui = &mut col[pos];
                      pos += 1;
+                     c_ui.label(button_cfg.label.as_str());
 
-                     c_ui.label(&button_cfg.label);
                      let btn = c_ui.button(format!("  {}  ", button_cfg.button_label));
                      if btn.clicked() {
-                         manager.move_current(&button_cfg.path, &filename_buff);
-                         filename_buff.clear();
+                         manager.move_current(&button_cfg.path, filename_buff);
                      }
                  }
             }
         };
+
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             ui.columns(config.buttons.len(), create_buttons)
         });
@@ -369,12 +453,12 @@ fn update(app: &App, model: &mut Model, update: Update) {
         //     //     }
         //     // });
 
-        // detect confirmation
+
         let k = ui.input();
 
         if inputbox_r.lost_focus() {
             if k.key_pressed(egui::Key::Enter) {
-                manager.move_current(&config.default_folder, &filename_buff);
+                manager.move_current(&config.default_folder, filename_buff);
                 filename_buff.clear();
                 inputbox_r.request_focus();
             }
