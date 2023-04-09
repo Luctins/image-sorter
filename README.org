@@ -18,21 +18,21 @@ This is a idea that i've been meaning to make for a while, right now it's super 
 :CREATED:  [2023-01-10 Tue 21:31]
 :END:
 
-*** Autocompletion
+*** [#A] Undo
+- undoing recent actions
+
+*** [#A] Autocompletion
 - Move the cursor to the end when accepting suggestions (Not sure how to move the text cursor yet)
 - Cycle suggestions by pressing TAB
 
-*** Do and commit system
-- That allows queuing actions and undoing recent actions.
-
-*** Usability
+*** [#B] Usability
 - Add keyboard shortcuts based on the layout configuration
   - e.g `C- [key id]` to move to that category.
 - Implement =UiState= system with different screens based on state
 - Implement scrolling for very tall/wide images
 
-*** Misc
+*** [#C] Misc
 - Reddit banner remover ?
 
-*** Debug
-- [ ] Add a debug window for general use
+*** [#C] Debug
+- Add a debug window for general use
