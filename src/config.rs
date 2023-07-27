@@ -54,7 +54,8 @@ structstruck::strike!{
             /// Output path
             pub path: String,
 
-            pub shortcut: char,
+            // the key itself if the shortcut
+            // pub shortcut: char,
         }>,
     },
 }

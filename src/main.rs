@@ -12,6 +12,7 @@ use std::{
     sync::Arc
 };
 
+use data_store::DataStore;
 pub use nannou::prelude::*;
 
 pub use nannou_egui::{
@@ -73,7 +74,7 @@ structstruck::strike!{
     struct Model {
         egui: Egui,
 
-        config: Config,
+        config: DataStore<Config>,
 
         image_manager: ImageManager,
 
@@ -149,7 +150,11 @@ impl Model {
                 })
                 .unwrap_or(DEFAULT_CONFIG_S.to_string());
 
-            let c: Config = serde_json::from_str(&cfg_str).unwrap_or(DEFAULT_CONFIG.clone());
+            let c: Config = serde_json::from_str(&cfg_str)
+                .map_err(|e| eprintln!("config load error: {e}"))
+                .unwrap_or(DEFAULT_CONFIG.clone());
+
+            println!("configuration: {c:?}");
 
             // c.buttons = {
             //     let mut tmp = c.buttons.drain().collect::<Vec<_>>();
@@ -199,8 +204,7 @@ impl Model {
             //     button.label.replace(&button.label.replacen(id, &format!("[{}]", id), 1));
             // }
 
-            println!("configuration: {c:?}");
-            c
+            DataStore::new_from_data(&args.folder, c)
         };
 
         Model {
