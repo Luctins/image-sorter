@@ -1,8 +1,9 @@
 //! # File sorter
 
+#![allow(unused_imports)]
+
 /*--- Imports ------------------------------------------------------------------------------------*/
 
-#![allow(unused_imports)]
 use std::{
     io::{self, prelude::*, Error},
     fs::{self, ReadDir},
@@ -12,6 +13,7 @@ use std::{
 };
 
 pub use nannou::prelude::*;
+
 pub use nannou_egui::{
     self,
     egui::{self, Response, TextBuffer, TextEdit, color::rgb_from_hsv},
@@ -22,55 +24,48 @@ use serde::{Deserialize, Serialize};
 
 use clap::Parser;
 
+/*--- Mod ----------------------------------------------------------------------------------------*/
+
+mod data_store;
+
+mod config;
+use config::Config;
+
 mod image_manager;
 use image_manager::ImageManager;
 
 mod text_suggest;
-use text_suggest::TextSuggester;
 
 /*--- Global Constants ---------------------------------------------------------------------------*/
 
-const LOCAL_CONFIG_FOLDER: &'static str = ".image-sorter";
-const CONFIG_FILE_NAME: &'static str = "layout.json";
-
-pub const DEFAULT_LAYOUT_S: &'static str = std::include_str!("../config/layout.json.template");
-pub const DEFAULT_CATEGORIES_S: &'static str =
-    std::include_str!("../config/categories.json.template");
-
+const CONFIG_FILE_NAME: &'static str = ".image-sorter.yaml";
+pub const DEFAULT_CONFIG_S: &'static str = include_str!("../default/config.yaml");
 pub const TAG_SEPARATOR: &'static str = "--";
 
 lazy_static::lazy_static!{
-    static ref DEFAULT_LAYOUT: Config = json5::from_str(DEFAULT_LAYOUT_S)
+    static ref DEFAULT_CONFIG: Config = serde_yaml::from_str(DEFAULT_CONFIG_S)
         .expect("failed to parse default configuration");
 
     pub static ref PLACEHOLDER_BUF: &'static [u8] =
         std::include_bytes!("../assets/placeholder.bmp");
 }
 
-/*--- Impl ---------------------------------------------------------------------------------------*/
+/*--- Args ---------------------------------------------------------------------------------------*/
 
-#[derive(Parser, Debug)]
+#[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg()]
     folder: PathBuf,
 }
 
-/// Copy default content to a file (only if it doesn't exists)
-pub fn copy_default<P: AsRef<Path>, C: AsRef<str>>(path: P, content: C) {
-    let path = path.as_ref();
-    let content = content.as_ref();
-
-    let _ = std::fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&path)
-        .map(|mut f|
-             f.write(content.as_bytes())
-             .map_err(|e| eprintln!("failed to write {path:?} : {e}"))
-        )
-        .map_err(|e| eprintln!("failed to create {path:?} : {e}"));
+impl From<PathBuf> for Args {
+    fn from(value: PathBuf) -> Self {
+        Self { folder: value.into() }
+    }
 }
+
+/*--- Model --------------------------------------------------------------------------------------*/
 
 // model
 structstruck::strike!{
@@ -78,31 +73,24 @@ structstruck::strike!{
     struct Model {
         egui: Egui,
 
-        config:
-        #[derive(Debug, Clone, Deserialize, Serialize)]
-        pub struct {
-            default_folder: String,
-            buttons:
-            HashMap<String,
-            #[derive(Debug, Clone, Deserialize, Serialize)]
-            pub struct ButtonConfig {
-                pub label: String,
-                pub button_label: String,
-                pub path: String,
-                // #[serde(deserialize_with = "")]
-                // pub shortcut: Key,
-            }>,
-        },
-
-        text_suggest: TextSuggester,
+        config: Config,
 
         image_manager: ImageManager,
+
+        state:
+        #[derive(Debug, Clone, Copy, Default)]
+        pub enum State {
+            #[default]
+            Idle,
+            Input,
+        },
 
         ui_fields:
         #[derive(Default)]
         pub struct {
             destination_filename: String,
-            // new_category: String,
+            new_category: String,
+            new_tag: String,
         },
     }
 }
@@ -111,16 +99,16 @@ impl Model {
     pub fn new(_app: &App, egui: Egui) -> Self {
         use clap::error::{self, ErrorKind, Error};
 
-        let folder =
-            match Args::try_parse() {
-                Ok(a) => a.folder,
-                Err(e) => {
+        let args =
+        match Args::try_parse() {
+            Ok(a) => a,
+            Err(e) => {
+                Args::from(
                     match e.kind() {
                         ErrorKind::MissingRequiredArgument => {
                             println!("using current dir as fallback");
                             std::env::current_dir()
                                 .expect("cannot read current dir but no args provided")
-                                .to_path_buf()
                         },
 
                         ErrorKind::DisplayHelp => {
@@ -131,48 +119,43 @@ impl Model {
                         _ => {
                             panic!("unsupported");
                         }
-                    }
-                }
-            };
+                    })
+            }
+        };
 
+        let cfg_path = &args.folder;
 
-        let cfg_path = folder.join(LOCAL_CONFIG_FOLDER);
-
-        // load configuration of default value
+        // load configuration or default value
         let config = {
-            let p = folder.join(LOCAL_CONFIG_FOLDER).join(CONFIG_FILE_NAME);
+            let p = cfg_path.join(CONFIG_FILE_NAME);
+
             let cfg_str = fs::read_to_string(&p)
                 .map_err(|e| {
                     // TODO: copy default config to the cwd
                     println!("no local config present at {p:?}, {e}; ");
-                    println!("creating config folder '{cfg_path:?}'");
+                    println!("creating config file '{cfg_path:?}'");
 
-                    let layout_path = cfg_path.join(CONFIG_FILE_NAME);
-
-                    std::fs::create_dir_all(&cfg_path)
-                        .map(|ok| {println!("created default config folder: {cfg_path:?}"); ok})
-                        .expect(
-                            format!("failed to create config dir: {LOCAL_CONFIG_FOLDER}").as_str());
-
-                    println!("copying default layout file to config folder '{layout_path:?}'");
-
-                    crate::copy_default(&layout_path, DEFAULT_LAYOUT_S);
+                    let _ = std::fs::OpenOptions::new()
+                        .create_new(true)
+                        .write(true)
+                        .open(&cfg_path)
+                        .map(|mut f|
+                             f.write(DEFAULT_CONFIG_S.as_bytes())
+                             .map_err(|e| eprintln!("failed to write {cfg_path:?}: {e}"))
+                        )
+                        .map_err(|e| eprintln!("failed to create {cfg_path:?} : {e}"));
 
                     e
                 })
+                .unwrap_or(DEFAULT_CONFIG_S.to_string());
 
-                .unwrap_or(DEFAULT_LAYOUT_S.to_string());
+            let c: Config = serde_json::from_str(&cfg_str).unwrap_or(DEFAULT_CONFIG.clone());
 
-            let mut c:Config = json5::from_str(&cfg_str)
-                .map_err(|e| {
-                    println!("failed to parse configuration: {e}, using default");
-                    e
-                }).unwrap_or(DEFAULT_LAYOUT.clone());
-            c.buttons = {
-                let mut tmp = c.buttons.drain().collect::<Vec<_>>();
-                tmp.sort_by(|prev, next| prev.0.cmp(&next.0));
-                tmp.into_iter().collect()
-            };
+            // c.buttons = {
+            //     let mut tmp = c.buttons.drain().collect::<Vec<_>>();
+            //     tmp.sort_by(|prev, next| prev.0.cmp(&next.0));
+            //     tmp.into_iter().collect()
+            // };
 
             // // make sure the trash button exists
             // _ = c.buttons.insert(
@@ -221,15 +204,25 @@ impl Model {
         };
 
         Model {
-            image_manager: ImageManager::new(&folder, &config),
-            text_suggest: TextSuggester::new(&cfg_path),
+            image_manager: ImageManager::new(&args.folder, &config),
 
-            // init to empty
+            // init to default
             ui_fields: Default::default(),
+            state: Default::default(),
+
             config,
             egui,
         }
 
+    }
+
+    pub fn add_category(&mut self, new_category: &str) {
+        self.config.categories.insert(new_category.to_string());
+
+        println!("added new category: {}", new_category);
+
+        todo!()
+        //std::fs::write(&self.config_path, &cfg_str).expect("cannot write preferences");
     }
 }
 
@@ -262,7 +255,6 @@ fn update(app: &App, model: &mut Model, update: Update) {
     let egui = &mut model.egui;
     let manager = &mut model.image_manager;
 
-    let text_suggest = &mut model.text_suggest;
     let config = &model.config;
     let filename_buff = &mut model.ui_fields.destination_filename;
 
@@ -434,7 +426,8 @@ fn update(app: &App, model: &mut Model, update: Update) {
 
          let suggestions: Vec<String> = {
              if let Some(segment) = segments.last() {
-                text_suggest.get_suggestions(&segment)
+                 todo!("get suggestions and check if first position to not suggest tags");
+                // text_suggest:: .get_suggestions(&segment)
             } else {
                 vec![]
             }
@@ -493,7 +486,7 @@ fn update(app: &App, model: &mut Model, update: Update) {
                 *filename_buff =
                     segments.iter().fold(String::new(), |mut acc, part| {
                         acc.push_str(part);
-                        acc.push_str(text_suggest::TAG_SEPARATOR);
+                        acc.push_str(text_suggest::SEPARATOR);
                         acc
                     });
             }
@@ -523,12 +516,15 @@ fn update(app: &App, model: &mut Model, update: Update) {
 
             // set the input buffer as always the last segment if it exists
             if let Some(segment) = segments.last() {
-                text_suggest.new_category_buffer.replace(segment);
+                model.ui_fields.new_category.replace(segment);
             }
 
-            col[0].text_edit_singleline(&mut text_suggest.new_category_buffer);
+            col[0].text_edit_singleline(&mut model.ui_fields.new_category);
             if col[1].button(" \u{002b} ").clicked() {
-                text_suggest.add_category();
+                todo!("add categories")
+                // model.add_category(&model.ui_fields.new_category);
+                // model.ui_fields.new_category.clear();
+                //text_suggest.add_category();
             }
         });
     });

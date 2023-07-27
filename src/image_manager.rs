@@ -20,7 +20,6 @@ lazy_static!{
 
 /*--- Impl ---------------------------------------------------------------------------------------*/
 
-
 /// Image and file manager
 pub struct ImageManager {
     pub image_index: usize,
@@ -50,11 +49,12 @@ impl ImageManager {
             eprintln!("no supported files in current directory: {dir:?}");
             std::process::exit(1);
         }
+
         println!("file count: {}", images.len());
 
 
         let i = config.buttons.iter()
-            .map(|(_, ButtonConfig { path, ..})| path.as_str())
+            .map(|(_, b_cfg)| b_cfg.path.as_str())
             .chain(std::iter::once(config.default_folder.as_str()));
 
         for path in i {
@@ -230,3 +230,5 @@ impl ImageManager {
             ));
     }
 }
+
+/*--------------------------------------------- EOF ----------------------------------------------*/

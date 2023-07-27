@@ -1,0 +1,40 @@
+---
+
+default_folder: "output"
+
+layout:
+  buttons:
+    d:
+      label: "Delete"
+      button_label: "🗑"
+      path: "trash"
+    s:
+      label: "Separate"
+      button_label: "📤"
+      path: "other"
+
+categories:
+  - "engineering"
+  - "programming"
+  - "politics"
+  - "ai"
+  - "linux"
+  - "anime"
+  - "ptbr"
+  - "warframe"
+  - "gaming"
+  - "history"
+
+tags:
+  - "sticker"
+  - "comic"
+  - "work"
+  - "physics"
+  - "elite-dangerous"
+  - "alignment-chart"
+  - "win10"
+  - "math"
+  - "evangelion"
+  - "sysadmin"
+  - "jojo"
+  - "factorio"
