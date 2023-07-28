@@ -126,7 +126,7 @@ impl ImageManager {
     /// Path is prepended with no extra tokens so save can handle both separate and regular save
     ///
     /// Category is essentially the destination folder
-    pub fn move_current(&mut self, category: &str, new_name: &mut String) {
+    pub fn move_current(&mut self, category: &str, new_name: &str) {
 
         // TODO: implement act history
         // TODO: make category a enum? it's the destination folder
@@ -151,7 +151,7 @@ impl ImageManager {
 
         self.images.remove(self.image_index);
         self.reload_image();
-        new_name.clear()
+        // new_name.clear()
     }
 
 

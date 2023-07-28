@@ -124,16 +124,14 @@ impl Model {
             }
         };
 
-        let cfg_path = &args.folder;
-
         // load configuration or default value
         let config = {
-            let p = cfg_path.join(CONFIG_FILE_NAME);
+            let cfg_path = args.folder.join(CONFIG_FILE_NAME);
 
-            let cfg_str = fs::read_to_string(&p)
+            let cfg_str = fs::read_to_string(&cfg_path)
                 .map_err(|e| {
                     // TODO: copy default config to the cwd
-                    println!("no local config present at {p:?}, {e}; ");
+                    println!("no local config present at {cfg_path:?}: {e}; ");
                     println!("creating config file '{cfg_path:?}'");
 
                     let _ = std::fs::OpenOptions::new()
@@ -150,7 +148,7 @@ impl Model {
                 })
                 .unwrap_or(DEFAULT_CONFIG_S.to_string());
 
-            let c: Config = serde_json::from_str(&cfg_str)
+            let mut c: Config = serde_json::from_str(&cfg_str)
                 .map_err(|e| eprintln!("config load error: {e}"))
                 .unwrap_or(DEFAULT_CONFIG.clone());
 
@@ -628,3 +626,5 @@ fn view(app: &App, model: &Model, frame: Frame) {
 fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
     model.egui.handle_raw_event(event);
 }
+
+/*--------------------------------------------- EOF ----------------------------------------------*/

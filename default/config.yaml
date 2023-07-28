@@ -2,16 +2,15 @@
 
 default_folder: "output"
 
-layout:
-  buttons:
-    d:
-      label: "Delete"
-      button_label: "🗑"
-      path: "trash"
-    s:
-      label: "Separate"
-      button_label: "📤"
-      path: "other"
+buttons:
+  d:
+    label: "Delete"
+    button_label: "🗑"
+    path: "trash"
+  s:
+    label: "Separate"
+    button_label: "📤"
+    path: "other"
 
 categories:
   - "engineering"
